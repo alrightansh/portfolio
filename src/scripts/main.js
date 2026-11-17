@@ -11,6 +11,7 @@ import { STATIONS, OUTRO } from "./content.js";
 const FONT = "'Overused Grotesk', system-ui, sans-serif";
 const INTRO_MS = 3500;
 const CAM0 = 5.5;
+const START_HINT = matchMedia("(pointer: coarse)").matches ? "Swipe to dive in" : "Scroll to dive in";
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("scene");
@@ -100,25 +101,34 @@ addEventListener("wheel", (e) => {
   const k = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? innerHeight : 1;
   target = Math.max(0, Math.min(MAX_SCROLL, target + e.deltaY * k));
 }, { passive: false });
-let drag = false, dragY = 0, downX = 0, downY = 0;
+// Touch: a swipe moves the flight and keeps gliding after release (fling with friction).
+const TOUCH_GAIN = 3.2, FLING_FRICTION = 3.2, FLING_MAX = 9000;
+let drag = false, dragY = 0, downX = 0, downY = 0, dragT = 0, fling = 0;
 addEventListener("pointerdown", (e) => {
-  if (e.button === 0 || e.pointerType === "touch") { drag = true; dragY = e.clientY; downX = e.clientX; downY = e.clientY; }
+  if (e.button === 0 || e.pointerType === "touch") {
+    drag = true; dragY = e.clientY; downX = e.clientX; downY = e.clientY; dragT = performance.now(); fling = 0;
+  }
 });
 addEventListener("pointermove", (e) => {
   pointer.x = e.clientX; pointer.y = e.clientY; pointer.has = true;
   const { nx, ny } = world.pointer(e);
-  orbit.yawT = 0.18 * nx; orbit.pitchT = -0.08 * ny; orbit.active = true;
+  if (e.pointerType !== "touch") { orbit.yawT = 0.18 * nx; orbit.pitchT = -0.08 * ny; orbit.active = true; }
   if (drag && booted) {
-    const d = dragY - e.clientY;
-    dragY = e.clientY;
-    target = Math.max(0, Math.min(MAX_SCROLL, target + d * (e.pointerType === "touch" ? 4 : 1)));
+    const gain = e.pointerType === "touch" ? TOUCH_GAIN : 1;
+    const d = (dragY - e.clientY) * gain, now = performance.now();
+    const v = d / Math.max(1, now - dragT) * 1000;
+    fling = fling * 0.6 + v * 0.4; // smoothed px/s for the release
+    dragY = e.clientY; dragT = now;
+    target = Math.max(0, Math.min(MAX_SCROLL, target + d));
   }
 });
 addEventListener("pointerup", (e) => {
   drag = false;
+  if (e.pointerType !== "touch" || performance.now() - dragT > 80) fling = 0;
+  fling = Math.max(-FLING_MAX, Math.min(FLING_MAX, fling));
   if (booted && Math.hypot(e.clientX - downX, e.clientY - downY) < 6 && e.target === canvas) world.click();
 });
-addEventListener("pointercancel", () => { drag = false; });
+addEventListener("pointercancel", () => { drag = false; fling = 0; });
 document.addEventListener("pointerleave", () => { world.leave(); orbit.active = false; orbit.yawT = orbit.pitchT = 0; });
 addEventListener("keydown", (e) => {
   if (!booted) return;
@@ -143,6 +153,10 @@ function frame(now) {
   const il = introStart < 0 ? 0 : Math.min((now - introStart) / INTRO_MS, 1);
   const intro = { linear: il, eased: 1 - Math.pow(1 - il, 3) };
 
+  if (!drag && Math.abs(fling) > 5) {
+    target = Math.max(0, Math.min(MAX_SCROLL, target + fling * dt));
+    fling *= Math.exp(-FLING_FRICTION * dt);
+  }
   smooth += (target - smooth) * 0.08;
   const w = -distFor(smooth);
   const travelled = -w / K;
@@ -188,7 +202,7 @@ function frame(now) {
   }
   ticks.update(fIndex, introDone && tunnel < 0.02, now);
 
-  const hint = camZ > 2.5 ? "Scroll to dive in" : camZ > stationZ[4] - 3 ? "Keep going" : "Almost there";
+  const hint = camZ > 2.5 ? START_HINT : camZ > stationZ[4] - 3 ? "Keep going" : "Almost there";
   if (introDone && hint !== hintState) { hintState = hint; leftHint(hint); }
   updateOutro(camZ, now, dt);
 
@@ -227,7 +241,7 @@ async function boot() {
   introStart = performance.now();
   booted = true;
   heroChars.forEach(show);
-  leftHint("Scroll to dive in"); hintState = "Scroll to dive in";
+  leftHint(START_HINT); hintState = START_HINT;
   audioLabel("Audio off");
   document.querySelectorAll("[data-reveal]").forEach((el) => show(splitInto(el, el.dataset.reveal)));
   setTimeout(() => { introDone = true; document.body.classList.add("intro-done"); }, INTRO_MS * 0.6);

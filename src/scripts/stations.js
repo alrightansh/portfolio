@@ -4,6 +4,7 @@ import { P, rgb } from "./config.js";
 import * as F from "./glsl-fx.js";
 
 const PARTICLES = 6000;
+const PORTRAIT_GLASS_SCALE = 1.6;
 const v3 = (hex) => new THREE.Vector3(...rgb(hex));
 
 // Sample `count` points from the opaque pixels of a glyph string (text or emoji).
@@ -158,7 +159,8 @@ function makeGlassStation(texture, z) {
       const exit = smooth01((P.glassExitStart - d) / (P.glassExitStart - P.glassExitEnd));
       group.visible = enter > 0.001 && exit < 0.999;
       group.rotation.y = P.glassInitRotY * (1 - enter) + P.glassExitRotY * exit;
-      const s = Math.max(0.0001, enter);
+      // portrait screens see less width, so the image wall grows to stay readable
+      const s = Math.max(0.0001, enter) * (innerWidth < innerHeight ? PORTRAIT_GLASS_SCALE : 1);
       group.scale.set(s, s, s);
       u.uOpacity.value = Math.min(1, enter * 1.5) * (1 - exit);
       u.uTime.value = time;

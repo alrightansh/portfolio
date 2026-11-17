@@ -5,7 +5,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Anshuman Choudhary | Geospatial Data Scientist | alrightansh</title>
   <meta name="description" content="Anshuman Choudhary, geospatial data scientist: utility network migrations, electric and gas UPDM, remote sensing and GeoAI, told through maps." />
   <link rel="canonical" href="https://alrightansh.com/" />
@@ -28,7 +28,7 @@
     body { font-family: "Overused Grotesk", system-ui, sans-serif; -webkit-font-smoothing: antialiased;
       touch-action: none; user-select: none; }
     a { color: inherit; text-decoration: none; }
-    canvas#scene { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+    canvas#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
     /* masked character reveal */
     .wd { display: inline-block; white-space: nowrap; }
@@ -149,27 +149,55 @@
     #loaderPct { position: absolute; left: var(--pad); bottom: 24px; font-size: clamp(5rem, 14vw, 12rem);
       line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 
+    /* phones: one column, text in bands above and below the 3D object, safe-area aware */
     @media (max-width: 768px) {
-      :root { --pad: 20px; }
-      .hero { font-size: 22vw; }
-      #heroA { top: 70px; } #heroB { bottom: 80px; }
-      #heroP { font-size: 14px; }
-      .st-title, #outroLabel { font-size: 14vw; white-space: normal; text-align: center; }
-      .st-post { font-size: 4.5vw; }
-      .st-cap { font-size: 12px; max-width: 88vw; }
-      .caps { font-size: 12px; }
-      #outroBtn { top: 60%; }
-      .rs-head { top: 76px; max-width: none; right: var(--pad); }
-      .rs-title { font-size: 10vw; }
-      .rs-sub { font-size: 4vw; }
+      :root { --pad: 20px; --top: calc(20px + env(safe-area-inset-top)); --bottom: calc(28px + env(safe-area-inset-bottom)); }
+      .top { padding: var(--top) var(--pad) 0; }
+      .logo { top: calc(var(--top) - 4px); font-size: 19px; }
+      .caps { font-size: 11px; }
+      .bl, .br { bottom: var(--bottom); }
+      .br { display: none; }
+      #hint { position: fixed; right: var(--pad); bottom: var(--bottom); }
+      #audioBtn { margin-left: auto; }
+      .hero { font-size: 17.5vw; }
+      #heroA { top: calc(var(--top) + 56px); } #heroB { bottom: calc(var(--bottom) + 64px); }
+      #heroP { font-size: 13px; line-height: 1.5; width: calc(100vw - 2 * var(--pad)); }
+
+      #labels { left: var(--pad); right: var(--pad); top: calc(var(--top) + 64px); bottom: calc(var(--bottom) + 72px);
+        transform: none; }
+      .st-label { height: 100%; justify-content: flex-start; }
+      .st-title + * { margin-top: auto; }
+      .st-pre { font-size: 13px; margin-bottom: 8px; }
+      .st-title, #outroLabel { font-size: 12.5vw; line-height: 1.02; white-space: normal; text-align: center; }
+      .st-title sup { font-size: 0.36em; }
+      .st-post { font-size: 5.2vw; line-height: 1.25; max-width: none; }
+      .st-cap { margin-top: 0; font-size: 11.5px; line-height: 1.6; max-width: none; }
+      .st-title + .st-cap, .st-title + .st-post { margin-top: auto; }
+      .st-link { margin-top: 14px; font-size: 13px; padding: 6px 0; }
+      #outroLabel { top: 42%; width: calc(100vw - 2 * var(--pad)); }
+      #outroBtn { top: 62%; padding: 16px 38px; }
+      #ticks { height: 56px; bottom: env(safe-area-inset-bottom); }
+      #loaderPct { bottom: var(--bottom); }
+
+      .rs-head { top: calc(var(--top) + 52px); max-width: none; right: var(--pad); }
+      .rs-pre, .rs-idx, .rs-unit { font-size: 11px; }
+      .rs-title { margin-top: 8px; font-size: min(9.5vw, 42px); }
+      .rs-sub { margin-top: 6px; font-size: 13px; }
       .rs-eq { display: none; }
-      .rs-step { width: auto; right: var(--pad); bottom: 96px; }
-      .rs-name { font-size: 24px; }
-      .rs-text { font-size: 13px; min-height: 5.5em; }
-      .rs-stat { top: 190px; bottom: auto; }
-      .rs-num { font-size: 11vw; }
-      .rs-unit { font-size: 11px; }
-      .rs-legend { gap: 8px; font-size: 10px; }
+      .rs-stat { top: calc(var(--top) + 168px); bottom: auto; left: var(--pad); right: var(--pad);
+        display: flex; align-items: baseline; gap: 10px; text-align: left; flex-wrap: wrap; }
+      .rs-num { font-size: min(9vw, 40px); }
+      .rs-unit { margin-top: 0; flex: 1 1 0; min-width: 0; line-height: 1.35; }
+      .rs-unit .swap, .rs-unit .swap-layer { white-space: normal; }
+      #ticks { gap: 2px; } .tick { width: 10px; }
+      .rs-legend { width: 100%; justify-content: flex-start; gap: 10px; margin-top: 6px; font-size: 10px; }
+      .rs-step { width: auto; right: var(--pad); bottom: calc(var(--bottom) + 46px); }
+      .rs-name { margin-top: 6px; font-size: 22px; }
+      .rs-text { margin-top: 8px; font-size: 12.5px; line-height: 1.5; min-height: 6em; }
+      .rs-bar { margin-top: 12px; }
+      .rs-bar i { width: 18px; } .rs-bar i.on { width: 28px; }
+      .rs-attr { left: var(--pad); right: auto; bottom: calc(var(--bottom) + 22px); font-size: 9px; }
+      .rs-place { font-size: 10px; }
     }
   </style>
 </head>

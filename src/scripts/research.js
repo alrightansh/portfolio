@@ -17,7 +17,7 @@ const ROAD = { road_major: 2, road_minor: 3 };
 const ROAD_STEP = 0.0022;   // uv spacing between road particles, about 60 m on the ground
 // Free screen area for the map (fractions of the viewport, from the top-left), clear of the HUD.
 const FIT_LANDSCAPE = { x0: 0.34, x1: 0.78, y0: 0.12, y1: 0.88 };
-const FIT_PORTRAIT = { x0: 0.05, x1: 0.95, y0: 0.35, y1: 0.69 };
+const FIT_PORTRAIT = { x0: 0.04, x1: 0.96, y0: 0.34, y1: 0.66 };
 
 // Stage boundaries over research progress q (0..1); each layer fades in and out around its window.
 const STAGES = [0, 0.12, 0.24, 0.36, 0.58, 0.72, 0.86, 1];
@@ -146,18 +146,18 @@ void main() {
   gl_PointSize = (water ? 2.8 : 3.2) * uPixelRatio * clamp(5.0 / max(-mv.z, 0.5), 0.5, 1.6);
 }`;
 
+// Rain falls only over the watershed, from a short height onto the ground below each drop.
 const rainVert = /* glsl */ `
-attribute float aSeed;
-uniform vec2 uSize;
-uniform float uTime, uRain, uPixelRatio;
+attribute float aSeed, aElev;
+uniform float uTime, uRain, uLift, uPixelRatio;
 varying float vA;
 void main() {
-  float t = fract(uTime * 0.9 + aSeed * 17.0);
-  vec3 p = vec3((fract(aSeed * 3.71) - 0.5) * uSize.x, (fract(aSeed * 7.13) - 0.5) * uSize.y, 0.8 - t * 0.9);
+  float t = fract(uTime * 1.1 + aSeed * 17.0);
+  vec3 p = vec3(position.xy, aElev * uLift + 0.28 * (1.0 - t));
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
-  gl_PointSize = 6.0 * uPixelRatio * clamp(4.0 / max(-mv.z, 0.5), 0.4, 1.1);
-  vA = uRain * smoothstep(0.0, 0.15, t) * (1.0 - smoothstep(0.85, 1.0, t)) * 0.55;
+  gl_PointSize = 4.0 * uPixelRatio * clamp(4.0 / max(-mv.z, 0.5), 0.4, 1.1);
+  vA = uRain * smoothstep(0.0, 0.2, t) * (1.0 - smoothstep(0.8, 1.0, t)) * 0.5;
 }`;
 const rainFrag = /* glsl */ `
 varying float vA;
@@ -376,10 +376,15 @@ export async function createResearch(scene, dpr, stationZ) {
   rgeo.setAttribute("aSettled", dyn(runoff.out.settled, 1));
   const flowPts = new THREE.Points(rgeo, mat(runoffVert, dotFrag, shared, false));
 
-  const rs = new Float32Array(RAIN);
-  for (let i = 0; i < RAIN; i++) rs[i] = Math.random();
-  const ru = { ...shared, uSize: { value: size }, uRain: wu.uRain };
-  const rain = new THREE.Points(geometry({ position: [new Float32Array(RAIN * 3), 3], aSeed: [rs, 1] }), mat(rainVert, rainFrag, ru, true));
+  const rainPos = [], rainElev = [], rainSeed = [];
+  while (rainSeed.length < RAIN) {
+    const u = Math.random(), v = Math.random();
+    if (!riskAt(u, v)) continue; // outside the watershed
+    rainPos.push((u - 0.5) * size.x, (0.5 - v) * size.y, 0);
+    rainElev.push(ws.elevAt(u, v)); rainSeed.push(Math.random());
+  }
+  const ru = { ...shared, uRain: wu.uRain };
+  const rain = new THREE.Points(geometry({ position: [rainPos, 3], aElev: [rainElev, 1], aSeed: [rainSeed, 1] }), mat(rainVert, rainFrag, ru, true));
   const lu = { ...shared, uRoads: { value: 0 }, uImpact: { value: 0 } };
   const roads = new THREE.Points(buildRoads(osm, ws, size, riskAt), mat(roadVert, dotFrag, lu, true));
   const pu = { ...shared, uPlaces: { value: 0 }, uImpact: lu.uImpact };
