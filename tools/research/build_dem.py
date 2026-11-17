@@ -36,42 +36,46 @@ def read_layers():
     return w, h, np.stack([risk, *rest])
 
 
-def tile_xy(lon, lat):
-    n = 2 ** ZOOM
+BOX = (LON0, LAT0, LON1, LAT1)
+
+
+def tile_xy(lon, lat, z=ZOOM):
+    n = 2 ** z
     x = (lon + 180) / 360 * n
     y = (1 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2 * n
     return x, y
 
 
-def fetch(x, y):
-    path = CACHE / f"{ZOOM}_{x}_{y}.png"
+def fetch(x, y, z=ZOOM):
+    path = CACHE / f"{z}_{x}_{y}.png"
     if not path.exists():
         CACHE.mkdir(parents=True, exist_ok=True)
-        req = urllib.request.Request(TILE_URL.format(z=ZOOM, x=x, y=y), headers={"User-Agent": "dem-build/1.0"})
+        req = urllib.request.Request(TILE_URL.format(z=z, x=x, y=y), headers={"User-Agent": "dem-build/1.0"})
         with urllib.request.urlopen(req, timeout=60) as r:
             path.write_bytes(r.read())
     rgb = np.asarray(Image.open(path).convert("RGB")).astype(np.float64)
     return rgb[..., 0] * 256 + rgb[..., 1] + rgb[..., 2] / 256 - 32768
 
 
-def mosaic():
-    x0, y0 = tile_xy(LON0, LAT1)
-    x1, y1 = tile_xy(LON1, LAT0)
+def mosaic(box=BOX, z=ZOOM):
+    lon0, lat0, lon1, lat1 = box
+    x0, y0 = tile_xy(lon0, lat1, z)
+    x1, y1 = tile_xy(lon1, lat0, z)
     tx = range(int(x0), int(x1) + 1)
     ty = range(int(y0), int(y1) + 1)
-    rows = [np.hstack([fetch(x, y) for x in tx]) for y in ty]
+    rows = [np.hstack([fetch(x, y, z) for x in tx]) for y in ty]
     return np.vstack(rows), tx.start, ty.start
 
 
-def sample(dem, ox, oy, wd, hd):
-    # box average: 4x4 bilinear samples per grid cell, in global tile-pixel coordinates
-    sub = 4
+def sample(dem, ox, oy, wd, hd, box=BOX, z=ZOOM, sub=4):
+    # box average: sub x sub bilinear samples per grid cell, in global tile-pixel coordinates
+    lon0, lat0, lon1, lat1 = box
     fu = (np.arange(wd * sub) + 0.5) / (wd * sub)
     fv = (np.arange(hd * sub) + 0.5) / (hd * sub)
-    lon = LON0 + fu * (LON1 - LON0)
-    lat = LAT1 - fv * (LAT1 - LAT0)
-    px = np.array([tile_xy(l, LAT0)[0] for l in lon]) * 256 - ox * 256 - 0.5
-    py = np.array([tile_xy(LON0, l)[1] for l in lat]) * 256 - oy * 256 - 0.5
+    lon = lon0 + fu * (lon1 - lon0)
+    lat = lat1 - fv * (lat1 - lat0)
+    px = np.array([tile_xy(l, lat0, z)[0] for l in lon]) * 256 - ox * 256 - 0.5
+    py = np.array([tile_xy(lon0, l, z)[1] for l in lat]) * 256 - oy * 256 - 0.5
     gx, gy = np.meshgrid(px, py)
     x0, y0 = np.floor(gx).astype(int), np.floor(gy).astype(int)
     fx, fy = gx - x0, gy - y0

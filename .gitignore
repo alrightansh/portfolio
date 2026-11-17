@@ -20,6 +20,7 @@ secrets/
 
 # downloaded DEM tiles
 tools/research/.cache/
+__pycache__/
 
 # macOS-specific files
 .DS_Store

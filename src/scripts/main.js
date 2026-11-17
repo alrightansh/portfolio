@@ -172,8 +172,9 @@ function frame(now) {
   const { camZ, tunnel, time } = world.update(dt, { w, orbitPitch: orbit.pitch, orbitYaw: orbit.yaw, velFx: vel.fx }, intro);
   if (stations) stations.update(dt, camZ, time, world.pointerNDC, world.presence, world.speedFactor);
   const rq = research ? research.update(dt, camZ, time, world.camera) : 0;
-  hud.update(Boolean(research) && introDone && camZ <= research.pinStart + 1.2 && camZ >= research.pinEnd - 0.5, rq, dt);
-  if (research) hud.place(research.labels(world.camera));
+  hud.update(Boolean(research) && introDone && camZ <= research.pinStart + 1.2 && camZ >= research.pinEnd - 0.5, rq, dt,
+    research ? research.mag() : 0);
+  if (research) hud.place(research.overlay(world.camera));
 
   // cat orbits the MakeMeDizzy wall
   const catK = Math.max(0, 1 - Math.abs(camZ - dizzyZ - 2.5) / 3.2);

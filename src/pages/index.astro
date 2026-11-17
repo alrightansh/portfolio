@@ -89,7 +89,9 @@
     .rs-pre { color: var(--accent); }
     .rs-title { margin-top: 12px; font-size: 5.4vw; line-height: 1; letter-spacing: -0.02em; }
     .rs-sub { margin-top: 10px; font-size: 1.5vw; color: var(--dim); }
-    .rs-eq { position: absolute; right: var(--pad); top: 110px; font-size: 24px; letter-spacing: 0.04em; color: rgba(210, 228, 242, 0.45); }
+    .rs-eq { position: absolute; right: var(--pad); top: 110px; font-size: 24px; letter-spacing: 0.04em; color: rgba(210, 228, 242, 0.45);
+      opacity: 0; transition: opacity 0.4s ease; }
+    .rs-eq.on { opacity: 1; }
     .rs-eq span { display: inline-block; transition: color 0.35s ease, text-shadow 0.35s ease, transform 0.35s ease; }
     .rs-eq span.hot { color: #fff; text-shadow: 0 0 18px rgba(143, 211, 255, 0.95); transform: translateY(-3px); }
     .rs-step { position: absolute; left: var(--pad); bottom: 112px; width: min(470px, 38vw); }
@@ -105,20 +107,41 @@
     .rs-num { font-size: 6.2vw; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums;
       text-shadow: 0 0 30px rgba(143, 211, 255, 0.35); }
     .rs-unit { margin-top: 10px; color: var(--dim); }
-    .rs-legend { display: flex; gap: 14px; justify-content: flex-end; margin-top: 14px; font-size: 12px;
-      text-transform: uppercase; letter-spacing: 0.02em; opacity: 0; transform: translateY(8px);
-      transition: opacity 0.5s ease, transform 0.5s ease; }
+    .rs-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: flex-end; margin-top: 14px; font-size: 12px;
+      text-transform: uppercase; letter-spacing: 0.02em; opacity: 0; transform: translateY(6px);
+      transition: opacity 0.3s ease, transform 0.3s ease; }
     .rs-legend.on { opacity: 1; transform: none; }
+    .rs-legend span { display: inline-flex; align-items: center; }
     .rs-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
     .lg-low { background: #1f4079; } .lg-mod { background: #408cff; }
-    .lg-high { background: #a8dbff; } .lg-crit { background: #ff5c4d; }
-    .rs-place { position: absolute; left: 0; top: 0; padding-left: 12px; margin-top: -8px; font-size: 12px;
-      letter-spacing: 0.04em; text-transform: uppercase; color: #fff; opacity: 0; transition: opacity 0.5s ease;
-      text-shadow: 0 0 12px rgba(7, 9, 15, 0.9); white-space: nowrap; }
-    .rs-place::before { content: ""; position: absolute; left: 0; top: 50%; width: 6px; height: 1px; background: var(--accent); }
-    .rs-place.on { opacity: 1; }
-    .rs-place.north { padding: 0; margin: -22px 0 0 -6px; font-size: 13px; color: var(--accent); }
-    .rs-place.north::before { left: 4px; top: 18px; width: 1px; height: 14px; }
+    .lg-high { background: #8cccff; } .lg-crit { background: #ff5c4d; }
+    .lg-water { background: #9ed6ff; } .lg-soil { background: #e69457; }
+    .rs-legend .lg-river { width: 18px; height: 3px; border-radius: 2px; background: #73b8ff; }
+    .rs-legend .lg-stream { width: 18px; height: 1.5px; border-radius: 1px; background: #3873b8; }
+    .rs-legend .lg-edge { width: 16px; height: 0; border-radius: 0; border-top: 1.5px solid var(--accent); }
+    .rs-legend .lg-rain { width: 2px; height: 11px; border-radius: 1px; background: #b3d6ff; }
+    .rs-legend .lg-village { width: 6px; height: 6px; background: #dbe8f5; }
+    .rs-legend .lg-atrisk { width: 11px; height: 11px; border: 1.5px solid #ff6b57;
+      background: radial-gradient(circle, #ff6b57 0 2px, transparent 2.5px); }
+    .rs-legend .lg-road { width: 18px; height: 2px; border-radius: 1px; background: #ff6b57; }
+    .rs-legend .lg-ramp { gap: 8px; }
+    .rs-legend .lg-bar { width: 84px; height: 6px; border-radius: 3px; margin: 0;
+      background: linear-gradient(90deg, #0f214d, #296bd9, #80ccff); }
+    .rs-place { position: absolute; left: 0; top: 0; padding-left: 10px; margin-top: -8px; font-size: 12px;
+      letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg); opacity: 0; white-space: nowrap;
+      text-shadow: 0 0 10px rgba(7, 9, 15, 0.95), 0 0 3px rgba(7, 9, 15, 0.9); }
+    .rs-place::before { content: ""; position: absolute; left: -3px; top: 50%; width: 6px; height: 6px; margin-top: -3px;
+      border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px rgba(7, 9, 15, 0.55); }
+    .rs-place.big { padding: 0; margin: 0; font-size: 15px; letter-spacing: 0.18em; }
+    .rs-place.big::before { display: none; }
+    .rs-north { position: absolute; left: 0; top: 0; width: 20px; height: 40px; margin: -20px 0 0 -10px; opacity: 0; }
+    .rs-north svg { display: block; width: 20px; height: 40px; overflow: visible; }
+    .rs-north text { fill: var(--fg); font-size: 10px; }
+    .rs-north .nf { fill: var(--accent); }
+    .rs-north .no { fill: none; stroke: var(--accent); stroke-width: 1; stroke-linejoin: round; }
+    .rs-scale { position: absolute; left: 0; top: 0; opacity: 0; font-size: 11px; letter-spacing: 0.04em; white-space: nowrap;
+      text-shadow: 0 0 8px rgba(7, 9, 15, 0.9); }
+    .rs-scale i { display: block; height: 5px; margin-top: 4px; border: 1px solid var(--fg); border-top: 0; }
     .rs-attr { position: absolute; right: var(--pad); bottom: 84px; font-size: 10px; color: var(--dim); pointer-events: auto; }
     .rs-attr a { color: inherit; }
 
@@ -198,6 +221,7 @@
       .rs-bar i { width: 18px; } .rs-bar i.on { width: 28px; }
       .rs-attr { left: var(--pad); right: auto; bottom: calc(var(--bottom) + 22px); font-size: 9px; }
       .rs-place { font-size: 10px; }
+      .rs-place.big { font-size: 12px; }
     }
   </style>
 </head>
@@ -242,10 +266,12 @@
     <div class="rs-stat">
       <div class="rs-num">0</div>
       <div class="rs-unit"></div>
-      <div class="rs-legend"><span><i class="lg-low"></i>Low</span><span><i class="lg-mod"></i>Moderate</span><span><i class="lg-high"></i>High</span><span><i class="lg-crit"></i>Critical</span></div>
+      <div class="rs-legend"></div>
     </div>
     <div class="rs-places" aria-hidden="true"></div>
-    <div class="rs-attr">Elevation: Terrain Tiles (SRTM) · Map data © <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> contributors</div>
+    <div class="rs-north" aria-hidden="true"><svg viewBox="0 0 20 40"><text x="10" y="9" text-anchor="middle">N</text><path class="nf" d="M10 13 L15 38 L10 33 Z" /><path class="no" d="M10 13 L5 38 L10 33 Z" /></svg></div>
+    <div class="rs-scale" aria-hidden="true"><span></span><i></i></div>
+    <div class="rs-attr">Elevation: Terrain Tiles (SRTM) · Boundaries: Natural Earth · Map data © <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> contributors</div>
   </section>
   <div id="outroLabel"></div>
   <a id="outroBtn" href="https://www.linkedin.com/in/alrightansh/" rel="noopener">Say hello</a>

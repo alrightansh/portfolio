@@ -38,7 +38,7 @@ export const P = {
   statHoverGlowColor: "#ffffff", statHoverStiffness: 140, statHoverDamping: 16,
   statFormInMs: 490, statFormOutMs: 1440, statSpacing: 8, statFirstZ: -5.5, statIdleWiggle: 0.026,
   statLabelAppearOffset: 5.6, statLabelDisappearOffset: -0.9,
-  researchView: 3.3, researchPin: 3, researchDwell: 0.15,
+  researchView: 3.3, researchPin: 3, researchDwell: 0.1,
 
   tunnelStartZ: -64.5, tunnelEndZ: -88.5, tunnelRadius: 2.05, tunnelScatter: 0.31,
   tunnelSpiralTurns: 0.75, tunnelSpiralPitch: 0.735, tunnelRotSpeed: -0.21, tunnelWiggle: 0.02,

@@ -1,50 +1,81 @@
-// Research stop: the Neugal watershed as a shaded 3D terrain from a real DEM, with the RUSLE layers
-// from the dissertation draped over it, a drainage network derived from the DEM, physics-driven
-// water and soil runoff, and OpenStreetMap roads and villages.
-// Data: neugal-dem.bin (see research-data.js) and osm.json = { lines: {road_major, road_minor}, places, labels, stats }.
+// Research stop: one continuous three.js animation. It opens on the globe, zooms through India and
+// Himachal Pradesh to the Neugal watershed beside Palampur, then tilts the valley into a 3D relief
+// built from a real DEM and shows one layer at a time: the drainage network, the height, a storm's
+// runoff, the five RUSLE factors, soil loss, and the villages and roads at risk.
+// Data in public/research/ (built by tools/research/build_dem.py and build_maps.py):
+//   neugal-dem.bin      DEM, D8 drainage and RUSLE layers (see research-data.js)
+//   osm.json            { lines: {road_major, road_minor, ...}, places: [[u, v, risk]], labels, stats }
+//   context.json, world-land.png, hp-relief.jpg   the zoom context (see research-map.js)
+//   neugal-relief.jpg   natural-colour shaded relief of the watershed box
+//   neugal-mask.png     R stream lines, G Strahler order / 7, B watershed field (0.5 on the boundary)
 import * as THREE from "three";
 import { P } from "./config.js";
 import { loadWatershed, createRunoff } from "./research-data.js";
+import { R_KM, loadContext, zoomView, createZoomMap } from "./research-map.js";
 
+const BASE = "/research/";
 const MAP_H = 1.9;          // map height in world units before fitting to the screen
 const LIFT = 0.3;           // full relief height: 1.5x vertical exaggeration of the real terrain
-const SHADE_EXAGGERATION = 2.5;
-const CONTOUR_M = 200;      // contour interval
-const RAIN = 1400;
-const RUNOFF = 5000;
-const CHANNEL_CELLS = 30;   // accumulation where the drawn river network starts (about 0.4 km²)
-const ROAD = { road_major: 2, road_minor: 3 };
-const ROAD_STEP = 0.0022;   // uv spacing between road particles, about 60 m on the ground
+const FACE_TILT = -0.2;     // flat map square to the camera, which looks down about 11 degrees
+const TILT = -0.72;         // north tilted away from the viewer, like a relief model on a table
+const SMALL = matchMedia("(max-width: 768px)").matches;
+const RAIN = SMALL ? 500 : 900;
+const RUNOFF = SMALL ? 1600 : 3000;
+const ROAD_STEP = 0.0022;   // uv spacing between road dots, about 60 m on the ground
+const HIGH_RISK = 3;        // risk classes 1..4 = low, moderate, high, critical
+const SCALE_KM = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000];
+const SCALE_PX = 110;       // longest scale bar in CSS px
 // Free screen area for the map (fractions of the viewport, from the top-left), clear of the HUD.
 const FIT_LANDSCAPE = { x0: 0.34, x1: 0.78, y0: 0.12, y1: 0.88 };
 const FIT_PORTRAIT = { x0: 0.04, x1: 0.96, y0: 0.34, y1: 0.66 };
+const fitBox = () => (innerWidth > innerHeight ? FIT_LANDSCAPE : FIT_PORTRAIT);
 
-// Stage boundaries over research progress q (0..1); each layer fades in and out around its window.
-const STAGES = [0, 0.12, 0.24, 0.36, 0.58, 0.72, 0.86, 1];
-const SUB = [0.36, 0.415, 0.47, 0.525, 0.58]; // K, LS, C, P inside the factor stage
-const FADE = 0.022;
+// Stage boundaries over research progress q (0..1): stage 0 is the zoom, stage 4 the five factors.
+const STAGES = [0, 0.2, 0.3, 0.38, 0.48, 0.72, 0.82, 0.91, 1];
+const FACTORS = [0.48, 0.528, 0.576, 0.624, 0.672, 0.72]; // R, K, LS, C, P
+// Zoom steps as fractions of stage 0: world to India, India to Himachal, Himachal to the watershed.
+const ZOOMS = [[0.14, 0.32], [0.44, 0.62], [0.74, 0.94]];
+const FADE = 0.015;
 function smooth(x) { const t = Math.max(0, Math.min(1, x)); return t * t * (3 - 2 * t); }
+const ramp = (x, a, b) => smooth((x - a) / (b - a));
 const win = (q, a, b) => Math.min(smooth((q - a + FADE) / (2 * FADE)), 1 - smooth((q - b + FADE) / (2 * FADE)));
-const ramp01 = (q, a, b) => smooth((q - a) / (b - a));
 
+// Zoom level for progress q: 0 world, 1 India, 2 Himachal Pradesh, 3 watershed.
+export function zoomLevel(q) {
+  const t = q / STAGES[1];
+  return ZOOMS.reduce((L, [a, b]) => L + smooth((t - a) / (b - a)), 0);
+}
 export function stageOf(q) {
   for (let i = STAGES.length - 2; i >= 0; i--) if (q >= STAGES[i]) return i;
   return 0;
 }
+// Step inside a stage: the zoom target in stage 0, the factor in stage 4, otherwise -1.
 export function subOf(q) {
-  for (let i = SUB.length - 2; i >= 0; i--) if (q >= SUB[i]) return i;
+  const s = stageOf(q);
+  if (s === 0) return Math.min(3, Math.floor(zoomLevel(q) + 0.5));
+  if (s !== 4) return -1;
+  for (let i = FACTORS.length - 2; i > 0; i--) if (q >= FACTORS[i]) return i;
   return 0;
+}
+
+// The post pass samples the scene at d * (1 + postLens * |d|²) for a screen offset d from the centre
+// (uv units), so a projected point is moved to where it is actually drawn.
+function toScreen(nx, ny) {
+  const sx = nx * 0.5, sy = ny * 0.5;
+  let dx = sx, dy = sy;
+  for (let i = 0; i < 12; i++) { const k = 1 + P.postLens * (dx * dx + dy * dy); dx = sx / k; dy = sy / k; }
+  return [(0.5 + dx) * innerWidth, (0.5 - dy) * innerHeight];
 }
 
 const RAMP = /* glsl */ `
 vec3 ramp(float v) {
-  vec3 a = vec3(0.055, 0.165, 0.36), b = vec3(0.25, 0.55, 1.0), c = vec3(0.78, 0.92, 1.0);
+  vec3 a = vec3(0.06, 0.13, 0.30), b = vec3(0.16, 0.42, 0.85), c = vec3(0.50, 0.80, 1.0);
   return v < 0.5 ? mix(a, b, v * 2.0) : mix(b, c, v * 2.0 - 1.0);
 }
 vec3 riskColor(float r) {
   if (r < 0.375) return vec3(0.12, 0.25, 0.48);
   if (r < 0.625) return vec3(0.25, 0.55, 1.0);
-  if (r < 0.875) return vec3(0.66, 0.86, 1.0);
+  if (r < 0.875) return vec3(0.55, 0.80, 1.0);
   return vec3(1.0, 0.36, 0.30);
 }`;
 
@@ -55,71 +86,52 @@ uniform float uLift;
 varying vec2 vD;
 void main() {
   vD = aData;
-  vec3 p = vec3(position.xy, aElev * uLift);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xy, aElev * uLift, 1.0);
 }`;
 
-// Hillshade from the DEM (sun in the north-west), contours, RUSLE layer colours and the watershed rim.
+// Natural-colour relief with one layer on top at a time: streams, a RUSLE factor, risk classes.
 const terrainFrag = /* glsl */ `
-uniform sampler2D uDem, uLA, uLB;
-uniform vec2 uTexel;
-uniform float uShadeK, uReliefM, uContourM, uContour, uForm, uDim, uWet, uTime;
-uniform vec4 uWa;    // base, elev, R, K
-uniform vec4 uWb;    // LS, C, P, A
-uniform float uWRisk;
+uniform sampler2D uRelief, uMask, uDist, uLA, uLB;
+uniform vec4 uWa;   // R, K, LS, C
+uniform vec4 uWb;   // P, risk classes, high risk, critical
+uniform float uShow, uOut, uRivers, uReveal, uFlow, uWet, uTime, uDistKm;
 varying vec2 vD;
+const vec3 ACCENT = vec3(0.56, 0.83, 1.0), CORAL = vec3(1.0, 0.36, 0.30);
+const float OUTSIDE = 0.32; // brightness left outside the watershed
 ${RAMP}
-float dem(vec2 o) { return texture2D(uDem, vD + o * uTexel).r; }
 void main() {
+  vec3 rel = texture2D(uRelief, vD).rgb;
+  vec4 m = texture2D(uMask, vD);
   vec4 la = texture2D(uLA, vD), lb = texture2D(uLB, vD);
-  if (lb.a < 0.5) discard;
-  float e = dem(vec2(0.0));
-  float ex = dem(vec2(1.0, 0.0)) - dem(vec2(-1.0, 0.0));
-  float ey = dem(vec2(0.0, 1.0)) - dem(vec2(0.0, -1.0));
-  vec3 nrm = normalize(vec3(-ex * uShadeK, ey * uShadeK, 1.0));
-  float sun = max(dot(nrm, normalize(vec3(-0.6, 0.6, 0.75))), 0.0);
+  float inside = smoothstep(0.4, 0.6, m.b);
+  float lum = dot(rel, vec3(0.299, 0.587, 0.114));
+  float shade = min(0.4 + 1.9 * lum, 1.15); // the relief's light and shadow, kept under the layers
 
-  vec3 base = mix(vec3(0.10, 0.20, 0.42), vec3(0.42, 0.64, 1.0), smoothstep(0.0, 1.0, e));
-  vec3 col = base * uWa.x
-    + mix(ramp(e), vec3(0.96, 0.98, 1.0), smoothstep(0.78, 0.95, e)) * uWa.y
-    + ramp(la.r) * uWa.z + ramp(la.g) * uWa.w
-    + ramp(la.b) * uWb.x + ramp(la.a) * uWb.y + ramp(lb.r) * uWb.z
-    + mix(vec3(0.1, 0.22, 0.45), vec3(1.0, 0.45, 0.38), lb.g) * uWb.w
-    + riskColor(lb.b) * uWRisk;
-  col /= max(uWa.x + uWa.y + uWa.z + uWa.w + uWb.x + uWb.y + uWb.z + uWb.w + uWRisk, 0.0001);
-  float critical = step(0.875, lb.b) * uWRisk;
-  col += vec3(0.5, 0.12, 0.08) * critical * (0.3 + 0.3 * sin(uTime * 3.0));
-  col *= mix(1.0, 0.4 + 0.6 * step(0.625, lb.b), uDim);
-  col *= 1.0 - 0.45 * uWet; // darker ground while the storm runs so the runoff reads
-  col *= 0.28 + 0.95 * sun;
+  float w = uWa.x + uWa.y + uWa.z + uWa.w + uWb.x + uWb.y;
+  vec3 layer = ramp(la.r) * uWa.x + ramp(la.g) * uWa.y + ramp(la.b) * uWa.z + ramp(la.a) * uWa.w
+    + ramp(lb.r) * uWb.x + riskColor(lb.b) * uWb.y;
+  vec3 col = mix(rel, layer / max(w, 1e-4) * shade, min(w, 1.0) * 0.9 * inside);
+  float high = step(0.625, lb.b) * inside, crit = step(0.875, lb.b) * inside;
+  col = mix(col, CORAL * shade, high * uWb.z * 0.2);
+  col = mix(col, CORAL * shade * (0.9 + 0.15 * sin(uTime * 2.5)), crit * uWb.w * 0.85);
+  col *= 1.0 - 0.3 * uWet; // wet ground while the storm runs
 
-  float cz = e * uReliefM / uContourM;
-  float line = 1.0 - smoothstep(0.0, 1.0, abs(fract(cz + 0.5) - 0.5) / max(fwidth(cz), 0.0001));
-  col += vec3(0.55, 0.82, 1.0) * line * uContour;
-  col += vec3(0.56, 0.83, 1.0) * (1.0 - smoothstep(0.5, 0.68, lb.a)) * 0.9;
+  // drainage: grows upstream from the outlet; pulses run downstream
+  float dn = texture2D(uDist, vD).r;
+  float grow = 1.0 - smoothstep(uReveal * 1.05 - 0.05, uReveal * 1.05, dn);
+  float order = clamp((m.g * 7.0 - 2.0) / 2.0, 0.0, 1.0);
+  vec3 water = mix(vec3(0.22, 0.45, 0.72), vec3(0.45, 0.72, 1.0), order);
+  water *= 1.0 + 0.18 * uFlow * sin(dn * uDistKm * 2.4 + uTime * 3.0);
+  col = mix(col, water, m.r * inside * grow * uRivers);
 
-  // forms by flooding upward from the valley floor, with a glowing front
-  float front = uForm * 1.15 - 0.05;
-  float vis = 1.0 - smoothstep(front - 0.03, front, e);
-  col += vec3(0.6, 0.85, 1.0) * (1.0 - smoothstep(0.0, 0.04, abs(e - front + 0.02))) * (1.0 - uForm) * 2.0;
-  gl_FragColor = vec4(col, vis);
-}`;
+  // outside the watershed: darker and greyer, with a thin rim on the boundary
+  float o = (1.0 - inside) * uOut;
+  col = mix(col, vec3(lum), 0.6 * o) * (1.0 - (1.0 - OUTSIDE) * o);
+  float rim = 1.0 - smoothstep(0.5, 1.5, abs(m.b - 0.5) / max(fwidth(m.b), 1e-4));
+  col = mix(col, ACCENT, rim * uOut * 0.6);
 
-// Drainage network from the DEM: brightness and width by contributing area, pulses run downstream.
-const riverVert = /* glsl */ `
-attribute float aElev, aStr, aDist;
-uniform float uLift, uTime, uWater, uRain, uForm, uPixelRatio, uDistKm;
-varying vec3 vC;
-varying float vA;
-void main() {
-  vec3 p = vec3(position.xy, aElev * uLift + 0.006);
-  float shown = smoothstep(0.0, 0.08, uWater * 1.1 - (1.0 - aStr));
-  float wave = 0.5 + 0.5 * sin(aDist * uDistKm * 1.1 + uTime * (2.2 + uRain * 3.5));
-  vC = mix(vec3(0.2, 0.55, 1.0), vec3(0.75, 0.93, 1.0), wave * 0.6 + aStr * 0.2);
-  vA = shown * uForm * (0.35 + 0.35 * aStr) * (0.5 + 0.5 * wave) * (1.0 + uRain * 0.4);
-  vec4 mv = modelViewMatrix * vec4(p, 1.0);
-  gl_Position = projectionMatrix * mv;
-  gl_PointSize = (1.3 + aStr * 2.2) * (1.0 + uRain * 0.3) * uPixelRatio * clamp(5.0 / max(-mv.z, 0.5), 0.5, 1.6);
+  vec2 edge = smoothstep(vec2(0.0), vec2(0.015), vD) * smoothstep(vec2(0.0), vec2(0.015), 1.0 - vD);
+  gl_FragColor = vec4(col, uShow * edge.x * edge.y);
 }`;
 
 const dotFrag = /* glsl */ `
@@ -139,11 +151,11 @@ varying vec3 vC;
 varying float vA;
 void main() {
   bool water = aKind < 0.5;
-  vC = water ? vec3(0.92, 0.99, 1.0) : aSettled > 0.0 ? vec3(0.78, 0.5, 0.3) : vec3(1.0, 0.6, 0.38);
-  vA = aAlpha;
+  vC = water ? vec3(0.62, 0.84, 1.0) : aSettled > 0.0 ? vec3(0.72, 0.47, 0.28) : vec3(0.90, 0.58, 0.34);
+  vA = aAlpha * (water ? 0.8 : 1.0);
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   gl_Position = projectionMatrix * mv;
-  gl_PointSize = (water ? 2.8 : 3.2) * uPixelRatio * clamp(5.0 / max(-mv.z, 0.5), 0.5, 1.6);
+  gl_PointSize = (water ? 2.6 : 3.0) * uPixelRatio * clamp(5.0 / max(-mv.z, 0.5), 0.5, 1.6);
 }`;
 
 // Rain falls only over the watershed, from a short height onto the ground below each drop.
@@ -157,7 +169,7 @@ void main() {
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
   gl_PointSize = 4.0 * uPixelRatio * clamp(4.0 / max(-mv.z, 0.5), 0.4, 1.1);
-  vA = uRain * smoothstep(0.0, 0.2, t) * (1.0 - smoothstep(0.8, 1.0, t)) * 0.5;
+  vA = uRain * smoothstep(0.0, 0.2, t) * (1.0 - smoothstep(0.8, 1.0, t)) * 0.4;
 }`;
 const rainFrag = /* glsl */ `
 varying float vA;
@@ -165,55 +177,50 @@ void main() {
   vec2 c = gl_PointCoord - 0.5;
   float a = (1.0 - smoothstep(0.02, 0.07, abs(c.x))) * (1.0 - smoothstep(0.2, 0.5, abs(c.y)));
   if (a < 0.01) discard;
-  gl_FragColor = vec4(0.7, 0.88, 1.0, a * vA);
+  gl_FragColor = vec4(0.70, 0.84, 1.0, a * vA);
 }`;
 
-// OSM roads draw on; those crossing high-risk ground turn coral.
+// Roads across high-risk ground, drawn on along their length.
 const roadVert = /* glsl */ `
-attribute float aKind, aT, aElev, aRisk, aSeed;
-uniform float uLift, uTime, uRoads, uImpact, uForm, uPixelRatio;
+attribute float aT, aElev, aSeed;
+uniform float uLift, uDraw, uAlpha, uPixelRatio;
 varying vec3 vC;
 varying float vA;
 void main() {
-  vec3 p = vec3(position.xy, aElev * uLift + 0.007);
-  float drawn = smoothstep(0.0, 0.04, uRoads * 1.15 - (aT * 0.8 + aSeed * 0.2));
-  bool major = aKind < 2.5;
-  vec3 c = major ? vec3(0.86, 0.92, 1.0) : vec3(0.6, 0.72, 0.92);
-  float a = major ? 0.7 : 0.4;
-  float hot = step(2.5, aRisk) * uImpact;
-  c = mix(c, vec3(1.0, 0.42, 0.34), hot * (0.6 + 0.4 * sin(uTime * 3.0 + aSeed * 9.0)));
-  vC = c;
-  vA = mix(a, 0.9, hot) * drawn * uForm;
+  vec3 p = vec3(position.xy, aElev * uLift + 0.006);
+  vC = vec3(1.0, 0.42, 0.34);
+  vA = 0.9 * uAlpha * smoothstep(0.0, 0.04, uDraw * 1.15 - (aT * 0.8 + aSeed * 0.2));
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
-  gl_PointSize = (major ? 3.0 : 2.1) * uPixelRatio * clamp(5.0 / max(-mv.z, 0.5), 0.5, 1.6);
+  gl_PointSize = 2.4 * uPixelRatio * clamp(5.0 / max(-mv.z, 0.5), 0.5, 1.6);
 }`;
 
+// Villages: small light dots; those on high-risk ground get a coral core and a slow ring.
 const placeVert = /* glsl */ `
 attribute float aRisk, aSeed, aElev;
-uniform float uLift, uTime, uPlaces, uImpact, uPixelRatio;
+uniform float uLift, uTime, uPlaces, uPixelRatio;
 varying vec3 vC;
-varying float vA, vRing;
+varying float vA, vCore, vRing;
 void main() {
-  vec3 p = vec3(position.xy, aElev * uLift + 0.012);
-  float risky = step(2.5, aRisk) * uImpact;
-  float beat = 0.5 + 0.5 * sin(uTime * 3.2 + aSeed * 12.0);
-  vC = mix(vec3(0.85, 0.95, 1.0), vec3(1.0, 0.45, 0.36), risky);
-  vA = uPlaces * smoothstep(0.0, 0.1, uPlaces * 1.2 - aSeed) * mix(0.7, 1.0, risky);
-  vRing = risky * beat;
+  vec3 p = vec3(position.xy, aElev * uLift + 0.01);
+  float risky = step(2.5, aRisk);
+  vC = mix(vec3(0.86, 0.91, 0.96), vec3(1.0, 0.42, 0.34), risky);
+  vA = uPlaces * smoothstep(0.0, 0.1, uPlaces * 1.2 - aSeed * 0.2) * mix(0.45, 1.0, risky);
+  vCore = mix(0.42, 0.16, risky);
+  vRing = risky * (0.55 + 0.45 * sin(uTime * 2.4 + aSeed * 12.0));
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
-  gl_PointSize = (5.0 + risky * (6.0 + beat * 8.0)) * uPixelRatio * clamp(5.0 / max(-mv.z, 0.5), 0.5, 1.6);
+  gl_PointSize = mix(3.5, 12.0, risky) * uPixelRatio * clamp(5.0 / max(-mv.z, 0.5), 0.5, 1.6);
 }`;
 const placeFrag = /* glsl */ `
 varying vec3 vC;
-varying float vA, vRing;
+varying float vA, vCore, vRing;
 void main() {
   float d = length(gl_PointCoord - 0.5);
   if (d > 0.5) discard;
-  float core = 1.0 - smoothstep(0.12, 0.2, d);
-  float ring = (1.0 - smoothstep(0.03, 0.06, abs(d - 0.38))) * vRing;
-  gl_FragColor = vec4(vC, (core + ring * 0.8) * vA);
+  float core = 1.0 - smoothstep(vCore - 0.08, vCore, d);
+  float ring = (1.0 - smoothstep(0.03, 0.07, abs(d - 0.38))) * vRing;
+  gl_FragColor = vec4(vC, max(core, ring * 0.8) * vA);
 }`;
 
 function geometry(attrs) {
@@ -237,49 +244,31 @@ function buildTerrain(ws, size) {
   return g;
 }
 
-function textures(ws) {
+// Flow distance to the outlet (0..1) and the RUSLE layers as textures.
+function layerTextures(ws) {
   const { Wd, Hd, Wl, Hl, layers: L } = ws;
+  let maxDist = 1;
+  for (let i = 0; i < Wd * Hd; i++) maxDist = Math.max(maxDist, ws.dist[i]);
   const half = new Uint16Array(Wd * Hd);
-  for (let i = 0; i < Wd * Hd; i++) half[i] = THREE.DataUtils.toHalfFloat(ws.norm(i));
-  const dem = new THREE.DataTexture(half, Wd, Hd, THREE.RedFormat, THREE.HalfFloatType);
+  for (let i = 0; i < Wd * Hd; i++) half[i] = THREE.DataUtils.toHalfFloat(ws.dist[i] / maxDist);
+  const dist = new THREE.DataTexture(half, Wd, Hd, THREE.RedFormat, THREE.HalfFloatType);
   const a = new Uint8Array(Wl * Hl * 4), b = new Uint8Array(Wl * Hl * 4);
   for (let i = 0; i < Wl * Hl; i++) {
     a.set([L.R[i], L.K[i], L.LS[i], L.C[i]], i * 4);
     b.set([L.P[i], L.A[i], L.risk[i] * 63.75, L.risk[i] ? 255 : 0], i * 4);
   }
   const la = new THREE.DataTexture(a, Wl, Hl), lb = new THREE.DataTexture(b, Wl, Hl);
-  for (const t of [dem, la, lb]) {
+  for (const t of [dist, la, lb]) {
     t.minFilter = t.magFilter = THREE.LinearFilter;
     t.needsUpdate = true;
   }
-  return { dem, la, lb };
-}
-
-function buildRivers(ws, size) {
-  const { Wd, Hd, acc, down, dist } = ws;
-  let maxAcc = 1, maxDist = 1;
-  for (let i = 0; i < Wd * Hd; i++) { maxAcc = Math.max(maxAcc, acc[i]); maxDist = Math.max(maxDist, dist[i]); }
-  const lo = Math.log(CHANNEL_CELLS), span = Math.log(maxAcc) - lo;
-  const pos = [], elev = [], str = [], dst = [];
-  for (let i = 0; i < Wd * Hd; i++) {
-    if (acc[i] < CHANNEL_CELLS || down[i] < 0) continue;
-    const d = down[i], s = (Math.log(acc[i]) - lo) / span;
-    for (let k = 0; k < 3; k++) {
-      const t = k / 3;
-      const u = ((i % Wd) * (1 - t) + (d % Wd) * t + 0.5) / Wd, v = (((i / Wd) | 0) * (1 - t) + ((d / Wd) | 0) * t + 0.5) / Hd;
-      pos.push((u - 0.5) * size.x, (0.5 - v) * size.y, 0);
-      elev.push(ws.elevAt(u, v)); str.push(s);
-      dst.push((dist[i] * (1 - t) + dist[d] * t) / maxDist);
-    }
-  }
-  return { geo: geometry({ position: [pos, 3], aElev: [elev, 1], aStr: [str, 1], aDist: [dst, 1] }), distKm: maxDist / 1000 };
+  return { dist, la, lb, distKm: maxDist / 1000 };
 }
 
 function buildRoads(osm, ws, size, riskAt) {
-  const pos = [], kind = [], t = [], elev = [], risk = [], seed = [];
-  for (const [name, list] of Object.entries(osm.lines)) {
-    if (!(name in ROAD)) continue;
-    for (const flat of list) {
+  const pos = [], t = [], elev = [], seed = [];
+  for (const name of ["road_major", "road_minor"]) {
+    for (const flat of osm.lines[name] || []) {
       const pts = [];
       for (let i = 0; i < flat.length; i += 2) pts.push([flat[i] / 1000, flat[i + 1] / 1000]);
       const cum = [0];
@@ -289,14 +278,14 @@ function buildRoads(osm, ws, size, riskAt) {
         const steps = Math.max(1, Math.ceil((cum[i] - cum[i - 1]) / ROAD_STEP));
         for (let k = 0; k < steps; k++) {
           const f = k / steps, x = pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, y = pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f;
+          if (riskAt(x, y) < HIGH_RISK) continue;
           pos.push((x - 0.5) * size.x, (0.5 - y) * size.y, 0);
-          kind.push(ROAD[name]); t.push((cum[i - 1] + (cum[i] - cum[i - 1]) * f) / total); seed.push(s);
-          elev.push(ws.elevAt(x, y)); risk.push(riskAt(x, y));
+          t.push((cum[i - 1] + (cum[i] - cum[i - 1]) * f) / total); seed.push(s); elev.push(ws.elevAt(x, y));
         }
       }
     }
   }
-  return geometry({ position: [pos, 3], aKind: [kind, 1], aT: [t, 1], aElev: [elev, 1], aRisk: [risk, 1], aSeed: [seed, 1] });
+  return geometry({ position: [pos, 3], aT: [t, 1], aElev: [elev, 1], aSeed: [seed, 1] });
 }
 
 function buildPlaces(osm, ws, size) {
@@ -313,24 +302,31 @@ async function loadJson(url) {
   return res.json();
 }
 
-// Scales and centres the map so its full relief fits the free screen area, as seen from the
-// camera's pinned position (the map is pinned relative to the camera while the stop plays).
+async function loadImage(loader, url) {
+  const t = await loader.loadAsync(url);
+  t.flipY = false; // row 0 is north, as in the data
+  t.anisotropy = 4;
+  return t;
+}
+
+// Scales and centres the map so its relief at the given lift fits the free screen area, as seen
+// from the camera's pinned position (the map is pinned relative to the camera while the stop plays).
 function makeFitter(group, size) {
   const corners = [];
-  for (const x of [-0.5, 0.5]) for (const y of [-0.5, 0.5]) for (const z of [0, LIFT]) corners.push(new THREE.Vector3(x * size.x, y * size.y, z));
+  for (const x of [-0.5, 0.5]) for (const y of [-0.5, 0.5]) for (const z of [0, 1]) corners.push(new THREE.Vector3(x * size.x, y * size.y, z));
   const cam = new THREE.PerspectiveCamera(), p = new THREE.Vector3();
-  return (camera, camShift, z) => {
+  return (camera, camShift, z, lift) => {
     cam.copy(camera);
     cam.position.z += camShift;
     cam.updateMatrixWorld(true);
-    const box = innerWidth > innerHeight ? FIT_LANDSCAPE : FIT_PORTRAIT;
+    const box = fitBox();
     const tx = box.x0 + box.x1 - 1, ty = 1 - (box.y0 + box.y1), tw = (box.x1 - box.x0) * 2, th = (box.y1 - box.y0) * 2;
     group.position.z = z;
     for (let iter = 0; iter < 6; iter++) {
       group.updateMatrixWorld(true);
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
       for (const c of corners) {
-        p.copy(c).applyMatrix4(group.matrixWorld).project(cam);
+        p.set(c.x, c.y, c.z * lift).applyMatrix4(group.matrixWorld).project(cam);
         x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
       }
       group.scale.multiplyScalar(Math.min(tw / (x1 - x0), th / (y1 - y0)));
@@ -342,31 +338,31 @@ function makeFitter(group, size) {
 }
 
 export async function createResearch(scene, dpr, stationZ) {
-  const [ws, osm] = await Promise.all([loadWatershed("/research/neugal-dem.bin"), loadJson("/research/osm.json")]);
+  const loader = new THREE.TextureLoader();
+  const [ws, osm, context, relief, mask] = await Promise.all([
+    loadWatershed(`${BASE}neugal-dem.bin`), loadJson(`${BASE}osm.json`), loadContext(BASE),
+    loadImage(loader, `${BASE}neugal-relief.jpg`), loadImage(loader, `${BASE}neugal-mask.png`)]);
   const size = new THREE.Vector2(MAP_H * ws.Wd / ws.Hd, MAP_H);
+  const K0 = (MAP_H * R_KM * 1000) / (ws.cellH * ws.Hd); // map units per Earth radius
+  const zm = createZoomMap(context, [0, 0, size.x / K0, size.y / K0]);
   const riskAt = (u, v) => ws.layers.risk[Math.min(ws.Hl - 1, (v * ws.Hl) | 0) * ws.Wl + Math.min(ws.Wl - 1, (u * ws.Wl) | 0)];
   const runoff = createRunoff(ws, RUNOFF);
+  const lt = layerTextures(ws);
 
-  const shared = { uLift: { value: 0 }, uTime: { value: 0 }, uPixelRatio: { value: dpr }, uForm: { value: 0 } };
-  const tex = textures(ws);
+  const shared = { uLift: { value: 0 }, uTime: { value: 0 }, uPixelRatio: { value: dpr } };
   const tu = {
-    ...shared, uDem: { value: tex.dem }, uLA: { value: tex.la }, uLB: { value: tex.lb },
-    uTexel: { value: new THREE.Vector2(1 / ws.Wd, 1 / ws.Hd) },
-    uShadeK: { value: (ws.relief / (2 * ws.cellW)) * SHADE_EXAGGERATION },
-    uReliefM: { value: ws.relief }, uContourM: { value: CONTOUR_M }, uContour: { value: 0 }, uDim: { value: 0 }, uWet: { value: 0 },
-    uWa: { value: new THREE.Vector4(1, 0, 0, 0) }, uWb: { value: new THREE.Vector4() }, uWRisk: { value: 0 },
+    ...shared, uRelief: { value: relief }, uMask: { value: mask }, uDist: { value: lt.dist },
+    uLA: { value: lt.la }, uLB: { value: lt.lb }, uWa: { value: new THREE.Vector4() }, uWb: { value: new THREE.Vector4() },
+    uShow: { value: 0 }, uOut: { value: 0 }, uRivers: { value: 0 }, uReveal: { value: 0 }, uFlow: { value: 0 },
+    uWet: { value: 0 }, uDistKm: { value: lt.distKm },
   };
-  const mat = (vertexShader, fragmentShader, uniforms, additive) => new THREE.ShaderMaterial({ vertexShader, fragmentShader,
-    uniforms, transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
+  const mat = (vertexShader, fragmentShader, uniforms) => new THREE.ShaderMaterial({
+    vertexShader, fragmentShader, uniforms, transparent: true, depthWrite: false });
 
-  const terrainMat = mat(terrainVert, terrainFrag, tu, false);
+  const terrainMat = mat(terrainVert, terrainFrag, tu);
   terrainMat.depthWrite = true;
   terrainMat.side = THREE.DoubleSide;
   const terrain = new THREE.Mesh(buildTerrain(ws, size), terrainMat);
-
-  const rv = buildRivers(ws, size);
-  const wu = { ...shared, uWater: { value: 0 }, uRain: { value: 0 }, uDistKm: { value: rv.distKm } };
-  const rivers = new THREE.Points(rv.geo, mat(riverVert, dotFrag, wu, true));
 
   const rgeo = new THREE.BufferGeometry();
   const dyn = (arr, n) => new THREE.BufferAttribute(arr, n).setUsage(THREE.DynamicDrawUsage);
@@ -374,7 +370,7 @@ export async function createResearch(scene, dpr, stationZ) {
   rgeo.setAttribute("aKind", dyn(runoff.out.kind, 1));
   rgeo.setAttribute("aAlpha", dyn(runoff.out.alpha, 1));
   rgeo.setAttribute("aSettled", dyn(runoff.out.settled, 1));
-  const flowPts = new THREE.Points(rgeo, mat(runoffVert, dotFrag, shared, false));
+  const flowPts = new THREE.Points(rgeo, mat(runoffVert, dotFrag, shared));
 
   const rainPos = [], rainElev = [], rainSeed = [];
   while (rainSeed.length < RAIN) {
@@ -383,114 +379,185 @@ export async function createResearch(scene, dpr, stationZ) {
     rainPos.push((u - 0.5) * size.x, (0.5 - v) * size.y, 0);
     rainElev.push(ws.elevAt(u, v)); rainSeed.push(Math.random());
   }
-  const ru = { ...shared, uRain: wu.uRain };
-  const rain = new THREE.Points(geometry({ position: [rainPos, 3], aElev: [rainElev, 1], aSeed: [rainSeed, 1] }), mat(rainVert, rainFrag, ru, true));
-  const lu = { ...shared, uRoads: { value: 0 }, uImpact: { value: 0 } };
-  const roads = new THREE.Points(buildRoads(osm, ws, size, riskAt), mat(roadVert, dotFrag, lu, true));
-  const pu = { ...shared, uPlaces: { value: 0 }, uImpact: lu.uImpact };
-  const places = new THREE.Points(buildPlaces(osm, ws, size), mat(placeVert, placeFrag, pu, true));
-  // draw after the world, on a cleared depth buffer, so the flight terrain never cuts into the map
-  [terrain, rivers, roads, flowPts, places, rain].forEach((m, i) => { m.frustumCulled = false; m.renderOrder = 1000 + i; });
-  terrain.onBeforeRender = (renderer) => {
+  const ru = { ...shared, uRain: { value: 0 } };
+  const rain = new THREE.Points(geometry({ position: [rainPos, 3], aElev: [rainElev, 1], aSeed: [rainSeed, 1] }), mat(rainVert, rainFrag, ru));
+  const lu = { ...shared, uDraw: { value: 0 }, uAlpha: { value: 0 } };
+  const roads = new THREE.Points(buildRoads(osm, ws, size, riskAt), mat(roadVert, dotFrag, lu));
+  const pu = { ...shared, uPlaces: { value: 0 } };
+  const places = new THREE.Points(buildPlaces(osm, ws, size), mat(placeVert, placeFrag, pu));
+
+  // Drawn after the world, on a cleared depth buffer, so the flight terrain never cuts into the map.
+  // The clearer is an empty triangle sorted just before the map in the transparent pass.
+  const clearer = new THREE.Mesh(geometry({ position: [new Array(9).fill(0), 3] }),
+    new THREE.MeshBasicMaterial({ transparent: true, colorWrite: false, depthWrite: false, depthTest: false }));
+  clearer.onBeforeRender = (renderer) => {
     renderer.state.buffers.depth.setMask(true); // clear is a no-op while depth writes are off
     renderer.clearDepth();
   };
+  const drawn = [clearer, ...zm.objects, terrain, flowPts, roads, places, rain];
+  drawn.forEach((m, i) => { m.frustumCulled = false; m.renderOrder = 999 + i; });
 
+  // group: fitted to the screen and tilted; zoom: magnification and view centre; map: Earth radii
+  const zoom = new THREE.Group();
+  zm.root.scale.set(K0, K0, 1);
+  zoom.add(zm.root, terrain, flowPts, roads, places, rain);
   const group = new THREE.Group();
-  group.add(terrain, rivers, roads, flowPts, places, rain);
-  group.rotation.x = -0.72; // north tilted away from the viewer, like a relief model on a table
+  group.add(clearer, zoom);
   scene.add(group);
   const fit = makeFitter(group, size);
   let fitted = false;
   const prevPos = new THREE.Vector3();
 
-  const ox = ((ws.outlet % ws.Wd) + 0.5) / ws.Wd, oy = (((ws.outlet / ws.Wd) | 0) + 0.5) / ws.Hd;
-  const labelLocal = [
-    ...osm.labels.map((l) => ({ name: l.n, u: l.u, v: l.v, cls: "" })),
-    { name: "N", u: 0.5, v: -0.05, cls: "north", flat: true },
-    { name: "Outlet to the Beas", u: ox, v: oy + 0.03, cls: "", flat: true },
-  ];
+  // map labels: zoom anchors in Earth radii, terrain labels in data uv
+  const S = STAGES;
+  const uvAt = (u, v) => [(u - 0.5) * size.x, (0.5 - v) * size.y];
+  const pal = osm.labels.find((l) => l.n === "Palampur");
+  const outlet = [((ws.outlet % ws.Wd) + 0.5) / ws.Wd, (((ws.outlet / ws.Wd) | 0) + 0.5) / ws.Hd];
+  let top = -1; // highest cell inside the watershed
+  for (let i = 0; i < ws.Wd * ws.Hd; i++) if (ws.down[i] >= 0 && (top < 0 || ws.elev[i] > ws.elev[top])) top = i;
+  const peak = [((top % ws.Wd) + 0.5) / ws.Wd, (((top / ws.Wd) | 0) + 0.5) / ws.Hd];
+  const { anchors } = context.ctx;
+  const labels = [
+    { name: "India", cls: "big", at: [anchors.india[0] * K0, anchors.india[1] * K0], a: (L) => ramp(L, 0.55, 0.85) * (1 - ramp(L, 1.45, 1.75)) },
+    { name: "Himachal Pradesh", cls: "big", at: [anchors.hp[0] * K0, anchors.hp[1] * K0], a: (L) => ramp(L, 1.5, 1.8) * (1 - ramp(L, 2.4, 2.7)) },
+    pal && { name: "Palampur", cls: "", uv: [pal.u, pal.v], a: (L, q) => ramp(L, 2.2, 2.5) * (1 - ramp(q, S[3] - 0.02, S[3])) + win(q, S[6], S[7]) },
+    { name: "Outlet to the Beas", cls: "", uv: outlet, a: (L, q) => win(q, S[1], S[2]) },
+    { name: "Dhauladhar range", cls: "", uv: peak, a: (L, q) => win(q, S[2], S[3]) },
+  ].filter(Boolean); // osm.json may lack Palampur after a rebuild
   const tmp = new THREE.Vector3();
+  const screenOf = (obj, x, y, z, camera) => {
+    tmp.set(x, y, z);
+    obj.localToWorld(tmp).project(camera);
+    return tmp.z < 1 ? toScreen(tmp.x, tmp.y) : null;
+  };
+
   const pinStart = stationZ + P.researchView;
   const pinEnd = pinStart - P.researchPin;
-  let form = 0, q = 0;
+  let form = 0, q = 0, L = 0, view = { Z: 1, cx: 0, cy: 0, mag: 1 };
 
   return {
     pinStart, pinEnd, stats: osm.stats,
     update(dt, camZ, time, camera) {
       q = Math.max(0, Math.min(1, (pinStart - camZ) / P.researchPin));
-      const want = camZ <= stationZ + 6.6 && camZ >= pinEnd - 1.0 ? 1 : 0;
-      form = Math.max(0, Math.min(1, form + (want ? 1 : -1) * dt / ((want ? 1100 : 1400) / 1000)));
+      const want = camZ <= stationZ + 6.6 && camZ >= pinEnd - 1.0;
+      form = Math.max(0, Math.min(1, form + (want ? dt / 1.1 : -dt / 1.4)));
       group.visible = form > 0.001;
-      if (!group.visible) return q;
+      if (!group.visible) { fitted = false; return q; } // snap to a fresh fit on re-entry
 
-      const clamped = Math.min(Math.max(camZ, pinEnd), pinStart);
+      L = zoomLevel(q);
+      const tilt = ramp(q, S[1], S[1] + 0.06);
+      const lift = LIFT * (0.75 * tilt + 0.25 * ramp(q, S[2] - 0.01, S[2] + 0.03));
+      group.rotation.x = FACE_TILT + (TILT - FACE_TILT) * tilt;
+      shared.uLift.value = lift;
+
       // refit every frame (scroll speed zooms the camera) and ease toward the fit so it never jumps
+      const clamped = Math.min(Math.max(camZ, pinEnd), pinStart);
       const prevScale = group.scale.x;
       prevPos.copy(group.position);
-      fit(camera, clamped - camZ, clamped - P.researchView);
+      fit(camera, clamped - camZ, clamped - P.researchView, lift);
       const k = fitted ? 1 - Math.exp(-dt * 5) : 1;
       group.scale.setScalar(prevScale + (group.scale.x - prevScale) * k);
       group.position.x = prevPos.x + (group.position.x - prevPos.x) * k;
       group.position.y = prevPos.y + (group.position.y - prevPos.y) * k;
       fitted = true;
 
-      const S = STAGES, mid = (S[4] + S[5]) / 2;
-      tu.uWa.value.set(win(q, -1, S[1]), win(q, S[1], S[2]), win(q, S[2], S[3]), win(q, SUB[0], SUB[1]));
-      tu.uWb.value.set(win(q, SUB[1], SUB[2]), win(q, SUB[2], SUB[3]), win(q, SUB[3], SUB[4]), win(q, S[4], mid));
-      tu.uWRisk.value = win(q, mid, 2);
-      tu.uDim.value = ramp01(q, S[5] - FADE, S[5] + FADE);
-      tu.uContour.value = 0.12 + 0.3 * win(q, S[1], S[2]);
-      shared.uLift.value = LIFT * (0.45 + 0.55 * ramp01(q, S[1] - FADE, S[1] + 2 * FADE));
-      const rainK = win(q, S[2], S[3]);
-      wu.uRain.value = rainK;
-      tu.uWet.value = rainK;
-      wu.uWater.value = Math.max(form > 0.95 ? 0.2 : 0, ramp01(q, 0.0, S[1] - 0.01));
-      lu.uRoads.value = ramp01(q, S[5], S[5] + 0.08);
-      lu.uImpact.value = ramp01(q, S[5] + 0.05, S[5] + 0.1);
-      pu.uPlaces.value = ramp01(q, S[5] + 0.02, S[5] + 0.09);
-      shared.uForm.value = form;
-      shared.uTime.value = time;
+      // zoom: each level fills the whole free screen area, measured in map units
+      const box = fitBox();
+      const aspect = ((box.x1 - box.x0) * innerWidth) / ((box.y1 - box.y0) * innerHeight);
+      view = zoomView(zm.boxes, L, { w: Math.max(size.x, size.y * aspect), h: Math.max(size.y, size.x / aspect) }, K0);
+      zoom.scale.set(view.Z, view.Z, 1);
+      zoom.position.set(-view.cx * K0 * view.Z, -view.cy * K0 * view.Z, 0);
+      zm.update(L, form);
 
-      // water runs off during the rain stage; soil from the soil-loss stage on, fainter under the overlay
-      const soilK = ramp01(q, S[4] - FADE, S[4] + FADE) * (1 - 0.6 * ramp01(q, S[5] - FADE, S[5] + FADE));
-      runoff.update(dt, [rainK * form, soilK * form], { w: size.x, h: size.y, lift: shared.uLift.value });
-      for (const k of ["position", "aKind", "aAlpha", "aSettled"]) flowPts.geometry.attributes[k].needsUpdate = true;
+      // one layer at a time
+      const F = FACTORS, rainK = win(q, S[3], S[4]), soilK = win(q, S[5], S[6]);
+      tu.uShow.value = form * ramp(L, 2.55, 2.95);
+      tu.uOut.value = ramp(L, 2.85, 3);
+      tu.uRivers.value = win(q, S[1], S[4]) * (1 - 0.5 * win(q, S[2], S[3]) - 0.3 * rainK);
+      tu.uReveal.value = ramp(q, S[1], S[1] + 0.07);
+      tu.uFlow.value = win(q, S[1], S[4]);
+      tu.uWet.value = rainK;
+      tu.uWa.value.set(win(q, F[0], F[1]), win(q, F[1], F[2]), win(q, F[2], F[3]), win(q, F[3], F[4]));
+      tu.uWb.value.set(win(q, F[4], F[5]), win(q, S[5], S[6]), win(q, S[6], S[7]), win(q, S[7], 2));
+      ru.uRain.value = rainK * form;
+      lu.uDraw.value = ramp(q, S[6], S[6] + 0.05);
+      lu.uAlpha.value = win(q, S[6], S[7]) * form;
+      pu.uPlaces.value = win(q, S[6], S[7]) * form;
+      shared.uTime.value = time;
+      terrain.visible = tu.uShow.value > 0.002;
+      rain.visible = ru.uRain.value > 0.002;
+      roads.visible = lu.uAlpha.value > 0.002;
+      places.visible = pu.uPlaces.value > 0.002;
+
+      // water runs off during the storm, soil during the soil-loss stage
+      flowPts.visible = (rainK + soilK) * form > 0.001;
+      runoff.update(dt, [rainK * form, soilK * form], { w: size.x, h: size.y, lift });
+      for (const key of ["position", "aKind", "aAlpha", "aSettled"]) flowPts.geometry.attributes[key].needsUpdate = true;
       return q;
     },
-    // Screen positions for map labels (CSS px), or an empty list when hidden.
-    labels(camera) {
-      if (!group.visible || form < 0.5) return [];
+    // Live magnification against the whole-planet view, for the first stage's counter.
+    mag() { return view.mag; },
+    // Screen overlay in CSS px: labels with opacity, north arrow and scale bar; null when hidden.
+    overlay(camera) {
+      if (!group.visible) return null;
       group.updateMatrixWorld();
-      return labelLocal.map(({ name, u, v, cls, flat }) => {
-        const z = flat ? 0 : ws.elevAt(u, v) * shared.uLift.value + 0.02;
-        tmp.set((u - 0.5) * size.x, (0.5 - v) * size.y, z);
-        group.localToWorld(tmp).project(camera);
-        return { name, cls, x: (tmp.x * 0.5 + 0.5) * innerWidth, y: (0.5 - tmp.y * 0.5) * innerHeight };
+      const out = labels.map((l) => {
+        const [x, y] = l.uv ? uvAt(l.uv[0], l.uv[1]) : l.at;
+        const z = l.uv ? ws.elevAt(l.uv[0], l.uv[1]) * shared.uLift.value + 0.015 : 0;
+        const p = screenOf(zoom, x, y, z, camera);
+        return { name: l.name, cls: l.cls, x: p ? p[0] : 0, y: p ? p[1] : 0, a: p ? form * Math.min(1, l.a(L, q)) : 0 };
       });
+      // north: the map's own +y on screen, foreshortened by the tilt
+      const o = screenOf(group, 0, 0, 0, camera), n = screenOf(group, 0, 0.1, 0, camera), e = screenOf(group, 0.1, 0, 0, camera);
+      if (!o || !n || !e) return { labels: out, north: null, scale: null };
+      const nx = n[0] - o[0], ny = n[1] - o[1], ex = Math.hypot(e[0] - o[0], e[1] - o[1]);
+      const box = fitBox(), W = innerWidth, H = innerHeight;
+      const north = { x: box.x1 * W - 26, y: box.y0 * H + 26, rot: Math.atan2(nx, -ny),
+        sy: Math.max(0.35, Math.min(1, Math.hypot(nx, ny) / ex)), a: form * ramp(L, 0.7, 1) };
+      // scale bar: true at the map centre; hidden once the map tilts into perspective
+      const pxPerKm = ((ex / 0.1) * K0 * view.Z) / R_KM;
+      let km = SCALE_KM[0];
+      for (const c of SCALE_KM) if (c * pxPerKm <= SCALE_PX) km = c;
+      const scale = { x: box.x0 * W + 6, y: box.y1 * H - 30, w: km * pxPerKm, text: `${km.toLocaleString("en-US")} km`,
+        a: form * ramp(L, 0.7, 1) * (1 - ramp(q, S[1], S[1] + 0.02)) };
+      return { labels: out, north, scale };
     },
   };
 }
 
 // HUD copy: plain numbers anyone can picture, with the technical detail in the text.
 // Football field = 105 m x 68 m (0.714 ha). Elephant = about 6 tonnes.
+// legend: [class suffix, label] pairs; ramps: low and high ends of each factor's colour ramp.
 export const RESEARCH_STAGES = [
+  { name: "Where it is", stat: "live", dp: 0, unit: "times closer than the whole planet", sub: [
+    "Planet Earth. Somewhere in the Himalayas is one small valley worth a closer look.",
+    "India. The valley sits in the far north, where the plains run into the mountains.",
+    "Himachal Pradesh: a mountain state of snow peaks, pine forests and terraced farms.",
+    "The Neugal watershed beside Palampur. All the rain that falls here drains into one river."] },
   { name: "A valley that feeds a river", stat: 80000, dp: 0, unit: "football fields of land",
+    legend: [["river", "Main river"], ["stream", "Stream"], ["edge", "Watershed edge"]],
     text: "The Neugal watershed covers 573.6 km² of Himalayan slopes. Every stream drawn here was traced from the terrain itself, and every drop of rain ends up at one outlet, on its way to the Beas." },
   { name: "How high it climbs", stat: 4749, dp: 0, unit: "metres at the top, almost 6 Burj Khalifas",
-    text: "Real elevation from the SRTM satellite mission, lit by a sun in the north-west, with a contour line every 200 m. The land rises from 562 m in the valley to snowy peaks." },
+    text: "Real elevation from the SRTM satellite mission, drawn 1.5 times taller so the slopes read. The land rises from 562 m in the valley to the snowy Dhauladhar peaks." },
   { name: "How hard it rains", stat: 2.2, dp: 1, unit: "metres of rain a year, taller than a grown-up",
+    legend: [["rain", "Rain"], ["water", "Runoff"]],
     text: "Rain runs downhill into the streams. Each drop moves at the speed Manning's equation gives for a 20 mm an hour storm on that slope; one second here is 30 minutes." },
-  { name: "Five ingredients", stat: 5, dp: 0, unit: "things decide how much soil washes away", sub: [
+  { name: "Five ingredients", stat: 5, dp: 0, unit: "things decide how much soil washes away", eq: true, sub: [
+    "Rain power: heavier, harder rain knocks more soil loose.",
     "Soil type: some soils crumble more easily than others.",
     "Slope: steeper, longer slopes let water race downhill and carry more soil.",
     "Plant cover: forests hold soil in place, bare fields do not. Mapped from Sentinel-2 images, 98% accurate.",
-    "Farming: terraces and contour ploughing slow the water down."] },
-  { name: "How much soil is lost", stat: 125, dp: 0, unit: "elephants of soil, from one football field, every year",
+    "Farming: terraces and contour ploughing slow the water down."],
+    ramps: [["Gentle rain", "Strong rain"], ["Sturdy soil", "Crumbly soil"], ["Gentle slope", "Steep slope"],
+      ["Dense forest", "Bare ground"], ["Protected", "Unprotected"]] },
+  { name: "How much soil is lost", stat: 125, dp: 0, unit: "elephants of soil, from one football field, every year", eq: true,
+    legend: [["low", "Low"], ["mod", "Moderate"], ["high", "High"], ["crit", "Critical"], ["soil", "Moving soil"]],
     text: "Soil leaves the steepest, barest slopes, rides the streams and settles where the land flattens. On average 1,047.66 tonnes per hectare wash away each year; the riskiest ground is ranked low to critical." },
   { name: "Who lives here", stat: 82, dp: 0, unit: "villages sit on or beside high-risk ground",
+    legend: [["village", "Village"], ["atrisk", "Village at risk"], ["road", "Road at risk"]],
     text: "OpenStreetMap shows 417 villages and hamlets, 876 km of roads and 360 km of streams in this valley. 201 km of road crosses high-risk ground." },
   { name: "Why it matters", stat: 2500, dp: 0, unit: "football fields of critical land to protect first",
+    legend: [["crit", "Critical land"]],
     text: "Soil takes hundreds of years to form and one storm to lose. Washed-away soil clogs rivers and small hydro dams, worsens floods and leaves farms poorer. This map shows planners exactly where to start, and the method works for any valley." },
 ];
 export const EQ_TERMS = ["R", "K", "LS", "C", "P"];

@@ -146,32 +146,61 @@ export function makeTicks(host, count, onPick) {
   };
 }
 
-// Research HUD: step counter, stage name and text, equation highlight, counting stat, progress bar.
+// Research HUD: step counter, stage name and text, equation highlight, counting stat, legend,
+// progress bar, and the map overlay (labels, north arrow, scale bar).
 export function makeResearchHud(root, stages, terms, stageOf, subOf) {
   const q$ = (s) => root.querySelector(s);
   const idx = swapper(q$(".rs-idx")), name = swapper(q$(".rs-name"), 22);
   const text = swapper(q$(".rs-text"), 4), unit = swapper(q$(".rs-unit"), 10);
-  const num = q$(".rs-num"), legend = q$(".rs-legend");
+  const num = q$(".rs-num"), legend = q$(".rs-legend"), eqLine = q$(".rs-eq");
+  const north = q$(".rs-north"), scale = q$(".rs-scale"), scaleBar = q$(".rs-scale i"), scaleText = q$(".rs-scale span");
   const eq = [...root.querySelectorAll(".rs-eq [data-term]")];
   const bar = q$(".rs-bar"), pinHost = q$(".rs-places"), pins = [];
   stages.forEach(() => bar.appendChild(document.createElement("i")));
   const segs = [...bar.children];
   const head = [...root.querySelectorAll("[data-reveal-rs]")].map((el) => ({ el, text: el.dataset.revealRs, chars: [] }));
-  let shown = false, key = "", stat = { cur: 0, target: 0, dp: 0 };
+  let shown = false, key = "", st = stages[0], stat = { cur: 0, target: 0, dp: 0 }, legendKey = "", legendTimer = 0;
   const fmt = (v, dp) => v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  // legend: a colour ramp for a factor ["ramp", low, high], or swatches [class suffix, label]
+  const swatch = (cls) => { const i = document.createElement("i"); i.className = cls; return i; };
+  const legendItem = ([k, a, b]) => {
+    const span = document.createElement("span");
+    if (k === "ramp") { span.className = "lg-ramp"; span.append(a, swatch("lg-bar"), b); } else span.append(swatch(`lg-${k}`), a);
+    return span;
+  };
+  const setLegend = (items) => {
+    const k = JSON.stringify(items);
+    if (k === legendKey) return;
+    legendKey = k;
+    legend.classList.remove("on");
+    clearTimeout(legendTimer);
+    legendTimer = setTimeout(() => { legend.replaceChildren(...items.map(legendItem)); legend.classList.toggle("on", items.length > 0); }, 300);
+  };
+  const fade = (el, a) => { el.style.opacity = a > 0.004 ? a.toFixed(3) : "0"; };
   return {
-    // Projected map labels: [{name, cls, x, y}] in CSS px; empty when the map is hidden.
-    place(list) {
+    // Map overlay from research.overlay(): labels [{name, cls, x, y, a}], north and scale; null when hidden.
+    place(o) {
+      const list = o && shown ? o.labels : [];
       while (pins.length < list.length) pins.push(pinHost.appendChild(document.createElement("div")));
       pins.forEach((el, i) => {
         const p = list[i];
-        el.classList.toggle("on", Boolean(p) && shown);
-        if (!p) return;
-        if (el.textContent !== p.name) { el.textContent = p.name; el.className = `rs-place ${p.cls} on`; }
-        el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px)`;
+        fade(el, p ? p.a : 0);
+        if (!p || p.a <= 0.004) return;
+        if (el.textContent !== p.name) { el.textContent = p.name; el.className = `rs-place ${p.cls}`; }
+        el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px)${p.cls === "big" ? " translate(-50%, -50%)" : ""}`;
       });
+      const n = o && shown ? o.north : null, s = o && shown ? o.scale : null;
+      fade(north, n ? n.a : 0);
+      if (n && n.a > 0.004) north.style.transform = `translate(${n.x.toFixed(1)}px, ${n.y.toFixed(1)}px) rotate(${n.rot.toFixed(3)}rad) scaleY(${n.sy.toFixed(3)})`;
+      fade(scale, s ? s.a : 0);
+      if (s && s.a > 0.004) {
+        scale.style.transform = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px)`;
+        scaleBar.style.width = `${s.w.toFixed(1)}px`;
+        if (scaleText.textContent !== s.text) scaleText.textContent = s.text;
+      }
     },
-    update(visible, q, dt) {
+    // live: the value for a stage whose stat is "live" (the zoom's magnification)
+    update(visible, q, dt, live) {
       if (visible !== shown) {
         shown = visible;
         root.classList.toggle("on", visible);
@@ -181,20 +210,24 @@ export function makeResearchHud(root, stages, terms, stageOf, subOf) {
         if (!visible) key = "";
       }
       if (!visible) return;
-      const s = stageOf(q), sub = s === 3 ? subOf(q) : -1, st = stages[s];
+      const s = stageOf(q), d = stages[s], sub = d.sub ? subOf(q) : -1;
       const k = `${s}:${sub}`;
       if (k !== key) {
         key = k;
+        st = d;
         idx(`${String(s + 1).padStart(2, "0")} / ${String(stages.length).padStart(2, "0")}`);
-        name(st.name);
-        text(sub >= 0 ? st.sub[sub] : st.text);
-        unit(st.unit);
-        stat = { cur: stat.cur, target: st.stat, dp: st.dp };
-        const hot = s === 2 ? "R" : sub >= 0 ? terms[sub + 1] : s >= 4 ? "A" : "";
+        name(d.name);
+        text(sub >= 0 ? d.sub[sub] : d.text);
+        unit(d.unit);
+        stat = { cur: stat.cur, target: d.stat === "live" ? live : d.stat, dp: d.dp };
+        // the equation shows only with the factors and the soil loss they multiply into
+        const hot = d.eq ? (sub >= 0 ? terms[sub] : "A") : "";
         eq.forEach((e) => e.classList.toggle("hot", e.dataset.term === hot));
+        eqLine.classList.toggle("on", Boolean(d.eq));
         segs.forEach((g, i) => g.classList.toggle("on", i <= s));
-        legend.classList.toggle("on", s >= 4);
+        setLegend(d.ramps ? [["ramp", ...d.ramps[Math.max(0, sub)]]] : d.legend || []);
       }
+      if (st.stat === "live") stat.target = live;
       stat.cur += (stat.target - stat.cur) * Math.min(1, dt * 5);
       if (Math.abs(stat.target - stat.cur) < 10 ** -stat.dp / 2) stat.cur = stat.target;
       num.textContent = fmt(stat.cur, stat.dp);
