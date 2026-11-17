@@ -1,0 +1,51 @@
+name: india-relief-blog
+
+# Mirrors the MakeMeDizzy pattern: no published ports in production; the public
+# route is a Cloudflare tunnel. For a local port while testing:
+#   docker compose -f compose.yaml -f compose.debug.yaml up -d --build web
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 128
+    networks:
+      blog_net:
+        ipv4_address: 172.30.58.2
+
+  # Starts only with: docker compose --profile tunnel up -d
+  tunnel:
+    image: cloudflare/cloudflared:2026.11.1
+    restart: unless-stopped
+    profiles: [tunnel]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    cpus: 0.5
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run --credentials-file /run/secrets/tunnel_credentials
+    secrets:
+      - tunnel_credentials
+    volumes:
+      - ./state/cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+    networks:
+      blog_net:
+        ipv4_address: 172.30.58.10
+    depends_on:
+      - web
+
+networks:
+  blog_net:
+    ipam:
+      config:
+        - subnet: 172.30.58.0/24
+
+secrets:
+  tunnel_credentials:
+    file: ./secrets/tunnel_credentials.json

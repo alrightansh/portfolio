@@ -1,0 +1,9 @@
+# Tunnel india-relief-blog
+tunnel: a652fe55-1d38-4940-9741-ac467fd62750
+credentials-file: /run/secrets/tunnel_credentials
+ingress:
+  - hostname: alrightansh.com
+    service: http://web:8080
+  - hostname: www.alrightansh.com
+    service: http://web:8080
+  - service: http_status:404
