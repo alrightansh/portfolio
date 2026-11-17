@@ -18,6 +18,9 @@ secrets/
 *.pem
 *credentials*.json
 
+# downloaded DEM tiles
+tools/research/.cache/
+
 # macOS-specific files
 .DS_Store
 

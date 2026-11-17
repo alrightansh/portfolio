@@ -153,19 +153,23 @@ export function makeResearchHud(root, stages, terms, stageOf, subOf) {
   const text = swapper(q$(".rs-text"), 4), unit = swapper(q$(".rs-unit"), 10);
   const num = q$(".rs-num"), legend = q$(".rs-legend");
   const eq = [...root.querySelectorAll(".rs-eq [data-term]")];
-  const bar = q$(".rs-bar"), pin = q$(".rs-place");
+  const bar = q$(".rs-bar"), pinHost = q$(".rs-places"), pins = [];
   stages.forEach(() => bar.appendChild(document.createElement("i")));
   const segs = [...bar.children];
   const head = [...root.querySelectorAll("[data-reveal-rs]")].map((el) => ({ el, text: el.dataset.revealRs, chars: [] }));
   let shown = false, key = "", stat = { cur: 0, target: 0, dp: 0 };
   const fmt = (v, dp) => v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
   return {
-    // Projected town label; p is {name, x, y} in CSS px, or null when the map is hidden.
-    place(p) {
-      pin.classList.toggle("on", Boolean(p) && shown);
-      if (!p) return;
-      if (pin.textContent !== p.name) pin.textContent = p.name;
-      pin.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px)`;
+    // Projected map labels: [{name, cls, x, y}] in CSS px; empty when the map is hidden.
+    place(list) {
+      while (pins.length < list.length) pins.push(pinHost.appendChild(document.createElement("div")));
+      pins.forEach((el, i) => {
+        const p = list[i];
+        el.classList.toggle("on", Boolean(p) && shown);
+        if (!p) return;
+        if (el.textContent !== p.name) { el.textContent = p.name; el.className = `rs-place ${p.cls} on`; }
+        el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px)`;
+      });
     },
     update(visible, q, dt) {
       if (visible !== shown) {

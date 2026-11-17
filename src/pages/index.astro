@@ -16,7 +16,7 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="preload" href="/fonts/OverusedGrotesk-Regular.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/OverusedGrotesk-Medium.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="/research/neugal.bin" as="fetch" crossorigin="anonymous" />
+  <link rel="preload" href="/research/neugal-dem.bin" as="fetch" crossorigin="anonymous" />
   <link rel="preload" href="/research/osm.json" as="fetch" crossorigin="anonymous" />
   <style is:global>
     @font-face { font-family: "Overused Grotesk"; src: url("/fonts/OverusedGrotesk-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
@@ -117,6 +117,8 @@
       text-shadow: 0 0 12px rgba(7, 9, 15, 0.9); white-space: nowrap; }
     .rs-place::before { content: ""; position: absolute; left: 0; top: 50%; width: 6px; height: 1px; background: var(--accent); }
     .rs-place.on { opacity: 1; }
+    .rs-place.north { padding: 0; margin: -22px 0 0 -6px; font-size: 13px; color: var(--accent); }
+    .rs-place.north::before { left: 4px; top: 18px; width: 1px; height: 14px; }
     .rs-attr { position: absolute; right: var(--pad); bottom: 84px; font-size: 10px; color: var(--dim); pointer-events: auto; }
     .rs-attr a { color: inherit; }
 
@@ -214,8 +216,8 @@
       <div class="rs-unit"></div>
       <div class="rs-legend"><span><i class="lg-low"></i>Low</span><span><i class="lg-mod"></i>Moderate</span><span><i class="lg-high"></i>High</span><span><i class="lg-crit"></i>Critical</span></div>
     </div>
-    <div class="rs-place" aria-hidden="true"></div>
-    <div class="rs-attr">Map data © <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> contributors</div>
+    <div class="rs-places" aria-hidden="true"></div>
+    <div class="rs-attr">Elevation: Terrain Tiles (SRTM) · Map data © <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> contributors</div>
   </section>
   <div id="outroLabel"></div>
   <a id="outroBtn" href="https://www.linkedin.com/in/alrightansh/" rel="noopener">Say hello</a>
