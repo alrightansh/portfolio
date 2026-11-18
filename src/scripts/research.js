@@ -12,6 +12,7 @@ import * as THREE from "three";
 import { P } from "./config.js";
 import { loadWatershed, createRunoff } from "./research-data.js";
 import { R_KM, loadContext, zoomView, createZoomMap } from "./research-map.js";
+import { fitBox, smooth, ramp, win, geometry, loadJson, loadImage, makeFitter, depthClearer, makeScreenOf } from "./stop-kit.js";
 
 const BASE = "/research/";
 const MAP_H = 1.9;          // map height in world units before fitting to the screen
@@ -25,20 +26,12 @@ const ROAD_STEP = 0.0022;   // uv spacing between road dots, about 60 m on the g
 const HIGH_RISK = 3;        // risk classes 1..4 = low, moderate, high, critical
 const SCALE_KM = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000];
 const SCALE_PX = 110;       // longest scale bar in CSS px
-// Free screen area for the map (fractions of the viewport, from the top-left), clear of the HUD.
-const FIT_LANDSCAPE = { x0: 0.34, x1: 0.78, y0: 0.12, y1: 0.88 };
-const FIT_PORTRAIT = { x0: 0.04, x1: 0.96, y0: 0.34, y1: 0.66 };
-const fitBox = () => (innerWidth > innerHeight ? FIT_LANDSCAPE : FIT_PORTRAIT);
 
 // Stage boundaries over research progress q (0..1): stage 0 is the zoom, stage 4 the five factors.
 const STAGES = [0, 0.2, 0.3, 0.38, 0.48, 0.72, 0.82, 0.91, 1];
 const FACTORS = [0.48, 0.528, 0.576, 0.624, 0.672, 0.72]; // R, K, LS, C, P
 // Zoom steps as fractions of stage 0: world to India, India to Himachal, Himachal to the watershed.
 const ZOOMS = [[0.14, 0.32], [0.44, 0.62], [0.74, 0.94]];
-const FADE = 0.015;
-function smooth(x) { const t = Math.max(0, Math.min(1, x)); return t * t * (3 - 2 * t); }
-const ramp = (x, a, b) => smooth((x - a) / (b - a));
-const win = (q, a, b) => Math.min(smooth((q - a + FADE) / (2 * FADE)), 1 - smooth((q - b + FADE) / (2 * FADE)));
 
 // Zoom level for progress q: 0 world, 1 India, 2 Himachal Pradesh, 3 watershed.
 export function zoomLevel(q) {
@@ -56,15 +49,6 @@ export function subOf(q) {
   if (s !== 4) return -1;
   for (let i = FACTORS.length - 2; i > 0; i--) if (q >= FACTORS[i]) return i;
   return 0;
-}
-
-// The post pass samples the scene at d * (1 + postLens * |d|²) for a screen offset d from the centre
-// (uv units), so a projected point is moved to where it is actually drawn.
-function toScreen(nx, ny) {
-  const sx = nx * 0.5, sy = ny * 0.5;
-  let dx = sx, dy = sy;
-  for (let i = 0; i < 12; i++) { const k = 1 + P.postLens * (dx * dx + dy * dy); dx = sx / k; dy = sy / k; }
-  return [(0.5 + dx) * innerWidth, (0.5 - dy) * innerHeight];
 }
 
 const RAMP = /* glsl */ `
@@ -223,12 +207,6 @@ void main() {
   gl_FragColor = vec4(vC, max(core, ring * 0.8) * vA);
 }`;
 
-function geometry(attrs) {
-  const g = new THREE.BufferGeometry();
-  for (const [name, [data, size]] of Object.entries(attrs)) g.setAttribute(name, new THREE.Float32BufferAttribute(data, size));
-  return g;
-}
-
 function buildTerrain(ws, size) {
   const { Wd, Hd } = ws;
   // vertices sit on DEM cell centres, row 0 (north) at the top
@@ -296,47 +274,6 @@ function buildPlaces(osm, ws, size) {
   return geometry({ position: [pos, 3], aRisk: [risk, 1], aSeed: [seed, 1], aElev: [elev, 1] });
 }
 
-async function loadJson(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
-  return res.json();
-}
-
-async function loadImage(loader, url) {
-  const t = await loader.loadAsync(url);
-  t.flipY = false; // row 0 is north, as in the data
-  t.anisotropy = 4;
-  return t;
-}
-
-// Scales and centres the map so its relief at the given lift fits the free screen area, as seen
-// from the camera's pinned position (the map is pinned relative to the camera while the stop plays).
-function makeFitter(group, size) {
-  const corners = [];
-  for (const x of [-0.5, 0.5]) for (const y of [-0.5, 0.5]) for (const z of [0, 1]) corners.push(new THREE.Vector3(x * size.x, y * size.y, z));
-  const cam = new THREE.PerspectiveCamera(), p = new THREE.Vector3();
-  return (camera, camShift, z, lift) => {
-    cam.copy(camera);
-    cam.position.z += camShift;
-    cam.updateMatrixWorld(true);
-    const box = fitBox();
-    const tx = box.x0 + box.x1 - 1, ty = 1 - (box.y0 + box.y1), tw = (box.x1 - box.x0) * 2, th = (box.y1 - box.y0) * 2;
-    group.position.z = z;
-    for (let iter = 0; iter < 6; iter++) {
-      group.updateMatrixWorld(true);
-      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-      for (const c of corners) {
-        p.set(c.x, c.y, c.z * lift).applyMatrix4(group.matrixWorld).project(cam);
-        x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
-      }
-      group.scale.multiplyScalar(Math.min(tw / (x1 - x0), th / (y1 - y0)));
-      const halfH = cam.position.distanceTo(group.position) * Math.tan((cam.fov * Math.PI) / 360);
-      group.position.x += (tx - (x0 + x1) / 2) * halfH * cam.aspect;
-      group.position.y += (ty - (y0 + y1) / 2) * halfH;
-    }
-  };
-}
-
 export async function createResearch(scene, dpr, stationZ) {
   const loader = new THREE.TextureLoader();
   const [ws, osm, context, relief, mask] = await Promise.all([
@@ -386,14 +323,7 @@ export async function createResearch(scene, dpr, stationZ) {
   const pu = { ...shared, uPlaces: { value: 0 } };
   const places = new THREE.Points(buildPlaces(osm, ws, size), mat(placeVert, placeFrag, pu));
 
-  // Drawn after the world, on a cleared depth buffer, so the flight terrain never cuts into the map.
-  // The clearer is an empty triangle sorted just before the map in the transparent pass.
-  const clearer = new THREE.Mesh(geometry({ position: [new Array(9).fill(0), 3] }),
-    new THREE.MeshBasicMaterial({ transparent: true, colorWrite: false, depthWrite: false, depthTest: false }));
-  clearer.onBeforeRender = (renderer) => {
-    renderer.state.buffers.depth.setMask(true); // clear is a no-op while depth writes are off
-    renderer.clearDepth();
-  };
+  const clearer = depthClearer();
   const drawn = [clearer, ...zm.objects, terrain, flowPts, roads, places, rain];
   drawn.forEach((m, i) => { m.frustumCulled = false; m.renderOrder = 999 + i; });
 
@@ -424,12 +354,7 @@ export async function createResearch(scene, dpr, stationZ) {
     { name: "Outlet to the Beas", cls: "", uv: outlet, a: (L, q) => win(q, S[1], S[2]) },
     { name: "Dhauladhar range", cls: "", uv: peak, a: (L, q) => win(q, S[2], S[3]) },
   ].filter(Boolean); // osm.json may lack Palampur after a rebuild
-  const tmp = new THREE.Vector3();
-  const screenOf = (obj, x, y, z, camera) => {
-    tmp.set(x, y, z);
-    obj.localToWorld(tmp).project(camera);
-    return tmp.z < 1 ? toScreen(tmp.x, tmp.y) : null;
-  };
+  const screenOf = makeScreenOf();
 
   const pinStart = stationZ + P.researchView;
   const pinEnd = pinStart - P.researchPin;

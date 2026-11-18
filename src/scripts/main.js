@@ -6,6 +6,7 @@ import { createStations, dizzyTexture, catTexture } from "./stations.js";
 import { createAmbience } from "./audio.js";
 import { splitInto, show, hide, swapper, makeLabel, makeTicks, magnet, makeResearchHud } from "./ui.js";
 import { createResearch, RESEARCH_STAGES, EQ_TERMS, stageOf, subOf } from "./research.js";
+import { createEnergy, ENERGY_STAGES, energyStageOf } from "./energy.js";
 import { STATIONS, OUTRO } from "./content.js";
 
 const FONT = "'Overused Grotesk', system-ui, sans-serif";
@@ -21,10 +22,12 @@ const audio = createAmbience();
 // ---------------- stations ----------------
 const loader = new THREE.TextureLoader();
 const tex = (url) => loader.load(url);
-const defs = STATIONS.map((s) => s.research ? { kind: "none" } : s.glass
+const isMapStop = (s) => Boolean(s.research || s.energy); // pinned stops with their own HUD
+const defs = STATIONS.map((s) => isMapStop(s) ? { kind: "none" } : s.glass
   ? { kind: "glass", texture: s.glass === "dizzy" ? dizzyTexture() : tex(s.glass) }
   : { kind: "glyph", glyph: s.glyph, height: s.glyphHeight });
-let stations = null, research = null;
+let stations = null;
+const stops = []; // map stops once loaded: { stop, hud }
 
 const cat = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.28),
   new THREE.MeshBasicMaterial({ map: catTexture(), transparent: true, side: THREE.DoubleSide, opacity: 0 }));
@@ -35,16 +38,39 @@ world.scene.add(cat);
 
 // ---------------- labels / chrome ----------------
 const labelHost = $("labels");
-const labels = STATIONS.map((s) => s.research ? { set: () => false } : makeLabel(labelHost, s));
+const labels = STATIONS.map((s) => isMapStop(s) ? { set: () => false } : makeLabel(labelHost, s));
 const stationZ = STATIONS.map((_, i) => P.statFirstZ - i * P.statSpacing);
 
-// Scroll px -> flight distance. The camera slows to a crawl while the research stop is pinned,
-// so its stages get room to play out.
+// Scroll px -> flight distance. The camera slows to a crawl while a map stop is pinned, so its
+// stages get room to play out. Each pin covers flight distance da..db and scroll sa..sb.
 const RS_Z = stationZ[STATIONS.findIndex((s) => s.research)];
-const K = P.scrollSpeed, DA = CAM0 - (RS_Z + P.researchView), DB = DA + P.researchPin;
-const SA = DA / K, SB = SA + P.researchPin / (K * P.researchDwell);
-const distFor = (s) => s <= SA ? s * K : s <= SB ? DA + (s - SA) * K * P.researchDwell : DB + (s - SB) * K;
-const scrollFor = (d) => d <= DA ? d / K : d <= DB ? SA + (d - DA) / (K * P.researchDwell) : SB + (d - DB) / K;
+const EN_Z = stationZ[STATIONS.findIndex((s) => s.energy)];
+const K = P.scrollSpeed;
+const PINS = [];
+STATIONS.forEach((s, i) => {
+  if (!isMapStop(s)) return;
+  const prev = PINS[PINS.length - 1] || { db: 0, sb: 0 };
+  const da = CAM0 - (stationZ[i] + P.researchView), sa = prev.sb + (da - prev.db) / K;
+  PINS.push({ da, db: da + P.researchPin, sa, sb: sa + P.researchPin / (K * P.researchDwell) });
+});
+function distFor(s) {
+  let prev = { db: 0, sb: 0 };
+  for (const p of PINS) {
+    if (s <= p.sa) break;
+    if (s <= p.sb) return p.da + (s - p.sa) * K * P.researchDwell;
+    prev = p;
+  }
+  return prev.db + (s - prev.sb) * K;
+}
+function scrollFor(d) {
+  let prev = { db: 0, sb: 0 };
+  for (const p of PINS) {
+    if (d <= p.da) break;
+    if (d <= p.db) return p.sa + (d - p.da) / (K * P.researchDwell);
+    prev = p;
+  }
+  return prev.sb + (d - prev.db) / K;
+}
 const MAX_SCROLL = scrollFor(-(P.outroButtonZ - 12));
 
 const leftHint = swapper($("hint"));
@@ -52,7 +78,10 @@ const audioLabel = swapper($("audioLabel"));
 const ticks = makeTicks($("ticks"), STATIONS.length, (i) => {
   target = Math.max(0, Math.min(MAX_SCROLL, scrollFor(CAM0 - (stationZ[i] + 3.3))));
 });
-const hud = makeResearchHud($("research"), RESEARCH_STAGES, EQ_TERMS, stageOf, subOf);
+const huds = {
+  research: makeResearchHud($("research"), RESEARCH_STAGES, EQ_TERMS, stageOf, subOf),
+  energy: makeResearchHud($("energy"), ENERGY_STAGES, [], energyStageOf, () => -1),
+};
 
 // hero
 const heroA = $("heroA"), heroB = $("heroB"), heroP = $("heroP");
@@ -171,10 +200,11 @@ function frame(now) {
 
   const { camZ, tunnel, time } = world.update(dt, { w, orbitPitch: orbit.pitch, orbitYaw: orbit.yaw, velFx: vel.fx }, intro);
   if (stations) stations.update(dt, camZ, time, world.pointerNDC, world.presence, world.speedFactor);
-  const rq = research ? research.update(dt, camZ, time, world.camera) : 0;
-  hud.update(Boolean(research) && introDone && camZ <= research.pinStart + 1.2 && camZ >= research.pinEnd - 0.5, rq, dt,
-    research ? research.mag() : 0);
-  if (research) hud.place(research.overlay(world.camera));
+  for (const { stop, hud } of stops) {
+    const q = stop.update(dt, camZ, time, world.camera);
+    hud.update(introDone && camZ <= stop.pinStart + 1.2 && camZ >= stop.pinEnd - 0.5, q, dt, stop.mag ? stop.mag() : 0);
+    hud.place(stop.overlay(world.camera));
+  }
 
   // cat orbits the MakeMeDizzy wall
   const catK = Math.max(0, 1 - Math.abs(camZ - dizzyZ - 2.5) / 3.2);
@@ -203,7 +233,7 @@ function frame(now) {
   }
   ticks.update(fIndex, introDone && tunnel < 0.02, now);
 
-  const hint = camZ > 2.5 ? START_HINT : camZ > stationZ[4] - 3 ? "Keep going" : "Almost there";
+  const hint = camZ > 2.5 ? START_HINT : camZ > stationZ[5] - 3 ? "Keep going" : "Almost there";
   if (introDone && hint !== hintState) { hintState = hint; leftHint(hint); }
   updateOutro(camZ, now, dt);
 
@@ -223,8 +253,10 @@ async function boot() {
   (async () => {
     try { await document.fonts.load(`500 220px ${FONT}`); await document.fonts.load(`400 18px ${FONT}`); } catch { /* fallback font */ }
     stations = createStations(world.scene, defs, FONT, world.dpr);
-    try { research = await createResearch(world.scene, world.dpr, RS_Z); } catch (err) { console.error("research stop unavailable", err); }
+    try { stops.push({ stop: await createResearch(world.scene, world.dpr, RS_Z), hud: huds.research }); } catch (err) { console.error("research stop unavailable", err); }
     ready = true;
+    // later in the flight, so it loads after the page is up
+    try { stops.push({ stop: await createEnergy(world.scene, world.dpr, EN_Z), hud: huds.energy }); } catch (err) { console.error("energy stop unavailable", err); }
   })();
   requestAnimationFrame(frame);
   await new Promise((done) => {

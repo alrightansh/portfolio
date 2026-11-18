@@ -40,7 +40,7 @@ export const P = {
   statLabelAppearOffset: 5.6, statLabelDisappearOffset: -0.9,
   researchView: 3.3, researchPin: 3, researchDwell: 0.1,
 
-  tunnelStartZ: -64.5, tunnelEndZ: -88.5, tunnelRadius: 2.05, tunnelScatter: 0.31,
+  tunnelStartZ: -72.5, tunnelEndZ: -96.5, tunnelRadius: 2.05, tunnelScatter: 0.31,
   tunnelSpiralTurns: 0.75, tunnelSpiralPitch: 0.735, tunnelRotSpeed: -0.21, tunnelWiggle: 0.02,
   tunnelPulseSpeed: 18, tunnelPulseWidth: 4, tunnelPulseBoost: 0.8, tunnelPulsePeriod: 4,
   tunnelBreathAmp: 0.35, tunnelBreathSpeed: 2.2, tunnelColorFar: "#000000",
@@ -56,7 +56,7 @@ export const P = {
   noiseTunSpeed: -0.89, noiseTunRotSpeed: 0.57, noiseTunFogNearStart: 4.9, noiseTunFogNearEnd: 0.9,
   noiseTunFogFarStart: 0, noiseTunFogFarEnd: 19,
 
-  outroPhase1Z: -94, outroButtonZ: -133, outroHoldMs: 2400,
+  outroPhase1Z: -102, outroButtonZ: -141, outroHoldMs: 2400,
   magnetRadius: 220, magnetStrength: 0.35,
 
   pWaveBoost: 0.85, pWaveSpeed: 1.85, pWavePeriod: 2.85, pWaveWidth: 1.1,

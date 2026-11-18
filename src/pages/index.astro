@@ -81,9 +81,9 @@
       border-bottom: 1px solid currentColor; opacity: 0; transition: opacity 0.4s ease; }
     .st-label.on .st-link { opacity: 1; pointer-events: auto; }
 
-    /* research stop */
-    #research { position: fixed; inset: 0; z-index: 14; pointer-events: none; opacity: 0; transition: opacity 0.6s ease; }
-    #research.on { opacity: 1; }
+    /* map stops: research (Neugal) and energy (North India) share the HUD styles */
+    #research, #energy { position: fixed; inset: 0; z-index: 14; pointer-events: none; opacity: 0; transition: opacity 0.6s ease; }
+    #research.on, #energy.on { opacity: 1; }
     .rs-head { position: absolute; left: var(--pad); top: 104px; max-width: 42vw; }
     .rs-pre, .rs-idx, .rs-unit { font-size: 14px; letter-spacing: 0.02em; text-transform: uppercase; }
     .rs-pre { color: var(--accent); }
@@ -127,6 +127,19 @@
     .rs-legend .lg-ramp { gap: 8px; }
     .rs-legend .lg-bar { width: 84px; height: 6px; border-radius: 3px; margin: 0;
       background: linear-gradient(90deg, #0f214d, #296bd9, #80ccff); }
+    .rs-legend .lg-bar-solar { background: linear-gradient(90deg, #1b2440, #3d3a73, #7b3f8c, #c0507a, #ef7b52, #ffb341, #ffe39a); }
+    .rs-legend .lg-bar-wind { background: linear-gradient(90deg, #13213a, #183e66, #1d6a8f, #2b97a8, #52c3b7, #9fe3c9, #ecfbe9); }
+    .rs-legend .lg-border { width: 16px; height: 0; border-radius: 0; border-top: 1.5px dashed rgba(235, 242, 255, 0.6); }
+    .rs-legend .lg-streak { width: 18px; height: 2px; border-radius: 1px; background: linear-gradient(90deg, transparent, #9eedff); }
+    .rs-legend .lg-l765, .rs-legend .lg-l400, .rs-legend .lg-l220 { width: 18px; height: 2px; border-radius: 1px; }
+    .lg-l765 { background: #ff7a59; } .lg-l400 { background: #ffd27a; } .lg-l220 { background: rgba(217, 226, 242, 0.6); }
+    .rs-legend .lg-sub { width: 7px; height: 7px; background: #ebf2ff; box-shadow: 0 0 0 1.5px #0a0f18; }
+    .rs-legend .lg-plant { width: 5px; height: 12px; border-radius: 1px; background: linear-gradient(#ffd27a, #c47d1c); }
+    .rs-legend .lg-beam { width: 5px; height: 14px; border-radius: 1px; background: linear-gradient(transparent, #ffb341); }
+    .lg-turbine { background: #45d3e8; }
+    .lg-open { background: #b4bcc8; } .lg-excl { background: #2a2d33; box-shadow: inset 0 0 0 1px #4a505a; }
+    .rs-legend .lg-prot { border-radius: 2px; background: repeating-linear-gradient(45deg, #5fbf7a 0 2px, #2a4a37 2px 4px); }
+    .lg-solar { background: #ffb341; } .lg-wind { background: #45d3e8; } .lg-hybrid { background: #c08cff; }
     .rs-place { position: absolute; left: 0; top: 0; padding-left: 10px; margin-top: -8px; font-size: 12px;
       letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg); opacity: 0; white-space: nowrap;
       text-shadow: 0 0 10px rgba(7, 9, 15, 0.95), 0 0 3px rgba(7, 9, 15, 0.9); }
@@ -134,6 +147,9 @@
       border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px rgba(7, 9, 15, 0.55); }
     .rs-place.big { padding: 0; margin: 0; font-size: 15px; letter-spacing: 0.18em; }
     .rs-place.big::before { display: none; }
+    .rs-place.state { font-size: 11px; letter-spacing: 0.14em; }
+    .rs-place.solar::before { background: #ffb341; } .rs-place.wind::before { background: #45d3e8; }
+    .rs-place.hybrid::before { background: #c08cff; } .rs-place.plant::before { background: #ffd27a; border-radius: 1px; }
     .rs-north { position: absolute; left: 0; top: 0; width: 20px; height: 40px; margin: -20px 0 0 -10px; opacity: 0; }
     .rs-north svg { display: block; width: 20px; height: 40px; overflow: visible; }
     .rs-north text { fill: var(--fg); font-size: 10px; }
@@ -142,7 +158,8 @@
     .rs-scale { position: absolute; left: 0; top: 0; opacity: 0; font-size: 11px; letter-spacing: 0.04em; white-space: nowrap;
       text-shadow: 0 0 8px rgba(7, 9, 15, 0.9); }
     .rs-scale i { display: block; height: 5px; margin-top: 4px; border: 1px solid var(--fg); border-top: 0; }
-    .rs-attr { position: absolute; right: var(--pad); bottom: 84px; font-size: 10px; color: var(--dim); pointer-events: auto; }
+    .rs-attr { position: absolute; right: var(--pad); bottom: 84px; font-size: 10px; color: var(--dim); pointer-events: none; }
+    #research.on .rs-attr, #energy.on .rs-attr { pointer-events: auto; }
     .rs-attr a { color: inherit; }
 
     /* outro */
@@ -222,6 +239,7 @@
       .rs-attr { left: var(--pad); right: auto; bottom: calc(var(--bottom) + 22px); font-size: 9px; }
       .rs-place { font-size: 10px; }
       .rs-place.big { font-size: 12px; }
+      .rs-place.state { font-size: 9px; }
     }
   </style>
 </head>
@@ -272,6 +290,29 @@
     <div class="rs-north" aria-hidden="true"><svg viewBox="0 0 20 40"><text x="10" y="9" text-anchor="middle">N</text><path class="nf" d="M10 13 L15 38 L10 33 Z" /><path class="no" d="M10 13 L5 38 L10 33 Z" /></svg></div>
     <div class="rs-scale" aria-hidden="true"><span></span><i></i></div>
     <div class="rs-attr">Elevation: Terrain Tiles (SRTM) · Boundaries: Natural Earth · Map data © <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> contributors</div>
+  </section>
+  <section id="energy" aria-label="Research: solar and wind energy hotspots in North India">
+    <div class="rs-head">
+      <div class="rs-pre" data-reveal-rs="Research work"></div>
+      <div class="rs-title" data-reveal-rs="Sun and wind"></div>
+      <div class="rs-sub" data-reveal-rs="Renewable energy hotspots in North India"></div>
+    </div>
+    <div class="rs-eq" aria-hidden="true"></div>
+    <div class="rs-step">
+      <div class="rs-idx"></div>
+      <div class="rs-name"></div>
+      <div class="rs-text"></div>
+      <div class="rs-bar"></div>
+    </div>
+    <div class="rs-stat">
+      <div class="rs-num">0</div>
+      <div class="rs-unit"></div>
+      <div class="rs-legend"></div>
+    </div>
+    <div class="rs-places" aria-hidden="true"></div>
+    <div class="rs-north" aria-hidden="true"><svg viewBox="0 0 20 40"><text x="10" y="9" text-anchor="middle">N</text><path class="nf" d="M10 13 L15 38 L10 33 Z" /><path class="no" d="M10 13 L5 38 L10 33 Z" /></svg></div>
+    <div class="rs-scale" aria-hidden="true"><span></span><i></i></div>
+    <div class="rs-attr">Solar: Global Solar Atlas · Wind: Global Wind Atlas · Land cover: ESA WorldCover · Elevation: SRTM · Capacity: MNRE · Grid and plants © <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> contributors</div>
   </section>
   <div id="outroLabel"></div>
   <a id="outroBtn" href="https://www.linkedin.com/in/alrightansh/" rel="noopener">Say hello</a>

@@ -15,6 +15,8 @@ export const STATIONS = [
   },
   // Research stop: rendered by research.js with its own HUD instead of a label.
   { research: true, title: "Neugal watershed" },
+  // Energy stop: rendered by energy.js with its own HUD instead of a label.
+  { energy: true, title: "Sun and wind" },
   {
     glyph: "HP", title: "Himachal", sup: "(→PwC)",
     caption: "Advanced degrees in Geography and Remote Sensing. A special knack for planet Earth: curious about how large systems work, and how they ripple down to shape smaller systems and the people who live within them.",

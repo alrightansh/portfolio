@@ -29,13 +29,20 @@ export function splitInto(el, text, stagger = 18, base = 0) {
   return chars;
 }
 
+// Chars hidden again before their reveal frame (a fast jump past a station) must stay hidden.
+const hiddenSince = new WeakSet();
 export function show(chars) {
+  chars.forEach((c) => hiddenSince.delete(c));
   requestAnimationFrame(() => requestAnimationFrame(() => chars.forEach((c) => {
+    if (hiddenSince.has(c)) return;
     c.style.transform = "translateY(0)"; c.style.opacity = "1";
   })));
 }
 export function hide(chars, up = true) {
-  chars.forEach((c) => { c.style.transform = up ? "translateY(-110%)" : "translateY(110%)"; c.style.opacity = "0"; });
+  chars.forEach((c) => {
+    hiddenSince.add(c);
+    c.style.transform = up ? "translateY(-110%)" : "translateY(110%)"; c.style.opacity = "0";
+  });
 }
 
 // Chrome label that rolls the old text up and the new text in from below.
@@ -161,11 +168,11 @@ export function makeResearchHud(root, stages, terms, stageOf, subOf) {
   const head = [...root.querySelectorAll("[data-reveal-rs]")].map((el) => ({ el, text: el.dataset.revealRs, chars: [] }));
   let shown = false, key = "", st = stages[0], stat = { cur: 0, target: 0, dp: 0 }, legendKey = "", legendTimer = 0;
   const fmt = (v, dp) => v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
-  // legend: a colour ramp for a factor ["ramp", low, high], or swatches [class suffix, label]
+  // legend: a colour ramp ["ramp", low, high, optional ramp class], or swatches [class suffix, label]
   const swatch = (cls) => { const i = document.createElement("i"); i.className = cls; return i; };
-  const legendItem = ([k, a, b]) => {
+  const legendItem = ([k, a, b, c]) => {
     const span = document.createElement("span");
-    if (k === "ramp") { span.className = "lg-ramp"; span.append(a, swatch("lg-bar"), b); } else span.append(swatch(`lg-${k}`), a);
+    if (k === "ramp") { span.className = "lg-ramp"; span.append(a, swatch(c ? `lg-bar lg-bar-${c}` : "lg-bar"), b); } else span.append(swatch(`lg-${k}`), a);
     return span;
   };
   const setLegend = (items) => {
@@ -187,7 +194,7 @@ export function makeResearchHud(root, stages, terms, stageOf, subOf) {
         fade(el, p ? p.a : 0);
         if (!p || p.a <= 0.004) return;
         if (el.textContent !== p.name) { el.textContent = p.name; el.className = `rs-place ${p.cls}`; }
-        el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px)${p.cls === "big" ? " translate(-50%, -50%)" : ""}`;
+        el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px)${el.classList.contains("big") ? " translate(-50%, -50%)" : ""}`;
       });
       const n = o && shown ? o.north : null, s = o && shown ? o.scale : null;
       fade(north, n ? n.a : 0);

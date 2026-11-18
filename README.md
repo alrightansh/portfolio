@@ -13,7 +13,7 @@ npx astro dev
 ## Layout
 
 - `src/pages/index.astro`: page, HUD markup and styles
-- `src/scripts/`: scene, stations, research stop, UI and audio
+- `src/scripts/`: scene, stations, the two map stops (research.js, energy.js, shared helpers in stop-kit.js), UI and audio
 - `src/scripts/content.js`: all portfolio copy
 - `public/research/`: Neugal watershed data
   - `neugal-dem.bin`: SRTM-based DEM, D8 drainage and the RUSLE layers extracted from the dissertation maps.
@@ -25,6 +25,9 @@ npx astro dev
     Rebuild these with `python -I tools/research/build_maps.py` after `build_dem.py` (same requirements and tile cache).
     It does not download the boundaries: put Natural Earth's `ne_50m_land.geojson`,
     `ne_10m_admin_0_countries_ind.geojson` and `ne_50m_admin_1_states_provinces.geojson` in `tools/research/.cache/` first.
+- `public/energy/`: the North India solar and wind hotspot stop (`ni-*-v1.*`), exported by `pipeline/export_web.py` in the
+  separate north-india-renewables project. Sources: Global Solar Atlas, Global Wind Atlas, ESA WorldCover, SRTM,
+  OpenStreetMap (ODbL) and MNRE. Bump the version in the file names when the data changes (the site caches them for 30 days).
 
 ## Deploy
 
