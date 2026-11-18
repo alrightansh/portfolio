@@ -6,7 +6,9 @@
 #   hp-relief.jpg      shaded relief around Himachal Pradesh, equirectangular over HP_BOX
 #   kangra-relief.jpg  sharper relief of the Kangra valley over KANGRA_BOX, the zoom's step between
 #                      Himachal and the watershed
-#   neugal-relief.jpg  natural-colour shaded relief of the watershed box (the terrain texture)
+#   neugal-albedo-v2.jpg  unlit natural colour of the watershed box (the terrain texture); the browser
+#                      lights it from a moving sun
+#   neugal-normal-v2.jpg  R, G terrain normal x (east) and y (north), B sky-view factor, for that light
 #   neugal-mask.png    R stream lines (width by Strahler order), G stream order / 7,
 #                      B watershed field (0.5 on the boundary)
 #
@@ -188,9 +190,10 @@ def world_land():
     Image.fromarray(to8(cover)).save(OUT / "world-land.png", optimize=True)
 
 
-def terrain_colour(elev, cell, zf, snowline, seed, bed=None, patch=False):
+def terrain_colour(elev, cell, zf, snowline, seed, bed=None, patch=False, lit=True):
     """Natural-colour relief: elevation zones, rock on steep ground, aspect-dependent snow,
-    north-west sun and local occlusion. cell = (dx, dy) in metres."""
+    north-west sun and local occlusion. cell = (dx, dy) in metres. lit=False leaves the sun out
+    (occlusion stays), at the brightness the sun gives flat ground."""
     h, w = elev.shape
     px = max(cell)
     size = lambda m: max(2, round(m / px))
@@ -222,13 +225,40 @@ def terrain_colour(elev, cell, zf, snowline, seed, bed=None, patch=False):
     snow = smoothstep(line - 120, line + 120, elev) * (1 - smoothstep(40, 56, slope))
     alb = alb * (1 - snow[..., None]) + np.array(SNOW) * snow[..., None]
     alb *= 1 + 0.10 * fbm(h, w, seed + 2, ((2, 1), (4, 0.6)))[..., None]  # canopy grain
+    if not lit:
+        return np.clip(alb * ((0.30 + 0.80 * math.sin(alt)) * ao)[..., None], 0, 1)
     col = alb * ((0.30 + 0.80 * hill) * ao)[..., None]
     col += (snow * (1 - hill))[..., None] * np.array((0.0, 0.03, 0.09))  # blue shadows on snow
     return np.clip(col, 0, 1)
 
 
-def save_jpg(rgb, name):
-    Image.fromarray(to8(rgb)).save(OUT / name, quality=86, optimize=True, progressive=True)
+def save_jpg(rgb, name, data=False):
+    # data: full-resolution chroma, so the channels' separate values do not bleed into each other
+    Image.fromarray(to8(rgb)).save(OUT / name, quality=92 if data else 86, optimize=True, progressive=True,
+                                   subsampling=0 if data else -1)
+
+
+def normal_map(elev, cell):
+    """R, G the unit normal's east and north components (0.5 flat), B the sky-view factor: the mean over 16
+    directions of cos² of the horizon angle, out to about 1.5 km. cell = (dx, dy) in metres, rows run south."""
+    gr, gc = np.gradient(elev, cell[1], cell[0])
+    inv = 1 / np.sqrt(gc * gc + gr * gr + 1)
+    h, w = elev.shape
+    radii = sorted({max(1, round(m / max(cell))) for m in (20, 40, 70, 110, 170, 250, 360, 520, 750, 1050, 1500)})
+    pad = radii[-1] + 1
+    zp = np.pad(elev, pad, mode="edge")
+    svf = np.zeros_like(elev)
+    for k in range(16):
+        a = 2 * math.pi * k / 16
+        best = np.zeros_like(elev)  # tan of the horizon angle, at least flat
+        for r in radii:
+            dc, dr = round(r * math.cos(a)), -round(r * math.sin(a))
+            if dc == 0 and dr == 0:
+                continue
+            nb = zp[pad + dr:pad + dr + h, pad + dc:pad + dc + w]
+            np.maximum(best, (nb - elev) / math.hypot(dc * cell[0], dr * cell[1]), out=best)
+        svf += 1 / (1 + best * best)
+    return np.stack([0.5 - 0.5 * gc * inv, 0.5 + 0.5 * gr * inv, svf / 16], -1)
 
 
 def state_relief(hp_feat, box, zoom, name, zf, snowline, seed, patch=False):
@@ -401,7 +431,9 @@ def watershed():
     river, strength, bed = draw_streams(paths, (gw, gh), (rw, rh))
 
     elev = dem.sample(mos, ox, oy, rw, rh, sub=1)
-    save_jpg(terrain_colour(elev, (width_m / rw, height_m / rh), 1.4, SHED_SNOWLINE, 7, bed, patch=True), "neugal-relief.jpg")
+    cell = (width_m / rw, height_m / rh)
+    save_jpg(terrain_colour(elev, cell, 1.4, SHED_SNOWLINE, 7, bed, patch=True, lit=False), "neugal-albedo-v2.jpg")
+    save_jpg(normal_map(elev, cell), "neugal-normal-v2.jpg", data=True)
     rgb = np.stack([river, strength, field(inside, rw, rh)], -1)
     Image.fromarray(to8(rgb)).save(OUT / "neugal-mask.png", optimize=True)
 
@@ -411,7 +443,8 @@ def main():
     world_land()
     hp_relief(hp_feat)
     watershed()
-    for name in ("context.json", "world-land.png", "hp-relief.jpg", "kangra-relief.jpg", "neugal-relief.jpg", "neugal-mask.png"):
+    for name in ("context.json", "world-land.png", "hp-relief.jpg", "kangra-relief.jpg", "neugal-albedo-v2.jpg",
+                 "neugal-normal-v2.jpg", "neugal-mask.png"):
         print(f"{name}: {(OUT / name).stat().st_size} bytes")
 
 

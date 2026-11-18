@@ -2,24 +2,26 @@
 // the terrain, solar yield, wind speed, the grid already built, the land ruled out, then the solar,
 // wind and hybrid hotspots of the north-india-renewables analysis.
 // Data in public/energy/ (built by north-india-renewables/pipeline/export_web.py):
-//   ni-dem-v1.bin     elevation in metres, Uint16, meta.dem.w x meta.dem.h, row 0 north
-//   ni-relief-v1.jpg, ni-solar-v1.jpg, ni-wind-v1.jpg   shaded relief and the two resource drapes
-//   ni-mask-v1.png    R state id x 20, G land open for solar, B protected areas
-//   ni-hot-v1.png     R solar hotspots, G wind hotspots, B hybrid sites
-//   ni-meta-v1.json   grid lines, substations, plants, turbines, labels, hotspots, wind speed grid;
+//   ni-dem-v2.bin     elevation in metres, Uint16, meta.dem.w x meta.dem.h, row 0 north
+//   ni-relief-v2.jpg, ni-solar-v2.jpg, ni-wind-v2.jpg   unlit terrain colour and the two resource drapes
+//   ni-normal-v2.jpg  R, G terrain normal x (east) and y (north), B sky-view factor: lit here by a moving sun
+//   ni-mask-v2.png    R state id x 20, G land open for solar, B protected areas
+//   ni-hot-v2.png     R solar hotspots, G wind hotspots, B hybrid sites
+//   ni-meta-v2.json   grid lines, substations, plants, turbines, labels, hotspots, wind speed grid;
 //                     positions as u, v in 0..10000 across the box, v = 0 at the north edge
 import * as THREE from "three";
 import { P } from "./config.js";
-import { fitBox, ramp, win, geometry, loadJson, loadImage, makeFitter, depthClearer, makeScreenOf } from "./stop-kit.js";
+import { fitBox, ramp, win, geometry, loadJson, loadImage, loadDem, buildWalls, wallVert, wallFrag, depthClearer,
+  makeScreenOf, makeViews, makeRig, frame, RELIGHT, WINDOW, MAP_UV, sunAt } from "./stop-kit.js";
 
 const BASE = "/energy/";
-const V = "v1";
+const V = "v2";
 const MAP_H = 1.9;          // north-south size in world units before fitting to the screen
 const LIFT = 0.16;          // height of the highest peak: about 19x vertical exaggeration
 const DEPTH = 0.035;        // the block's sides reach this far below sea level
 const FACE_TILT = -0.2;     // flat map square to the camera, which looks down about 11 degrees
 const TILT = -0.8;          // north tilted away, like a relief model on a table
-const YAW = 0.1;            // the model turns this far each way (radians) while the stop plays
+const SHADE_EXAG = 3.0;     // normal-map slopes steepened this much for the lighting (1 km cells are gentle)
 const SMALL = matchMedia("(max-width: 768px)").matches;
 const STREAKS = SMALL ? 700 : 1500;
 const STREAK_DIR = 0.3;     // radians north of east: an illustration, not a measured wind direction
@@ -29,7 +31,7 @@ const PLANT_H = 0.17;       // column height of the largest solar plant; columns
 const PLANT_W = 0.005;
 const BEAM_H = 0.34;        // beam height of the largest hotspot; beams scale with sqrt(GW)
 const BEAM_W = 0.01;
-const SCALE_KM = [50, 100, 200, 250, 500];
+const SCALE_KM = [20, 50, 100, 200, 250, 500];
 const SCALE_PX = 110;       // longest scale bar in CSS px
 const HUB = "Delhi";        // the grid draws on outward from here
 const kvClass = (kv) => (kv >= 765 ? 2 : kv >= 400 ? 1 : 0);
@@ -53,14 +55,18 @@ void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xy, aElev * uLift, 1.0);
 }`;
 
-// Relief with one story at a time on top: a resource drape, the land ruled out, or the hotspots.
+// Relief with one story at a time on top: a resource drape, the land ruled out, or the hotspots. The
+// terrain colour and the drapes are unlit: the normal map lights them from the moving sun.
 const terrainFrag = /* glsl */ `
-uniform sampler2D uRelief, uSolar, uWind, uMask, uHot;
+uniform sampler2D uRelief, uSolar, uWind, uMask, uHot, uNormal;
 uniform vec2 uMaskSize;
+uniform vec3 uSun;
 uniform float uShow, uOut, uBorders, uSolarK, uSolarWipe, uWindK, uWindWipe, uDim, uExcl, uTime, uAspect, uPixelRatio;
 uniform vec3 uHotK, uRip;   // solar, wind, hybrid: strength and how far the reveal wave has run
 uniform vec2 uOriS, uOriW, uOriH;
 varying vec2 vD;
+${RELIGHT}
+${WINDOW}
 const vec3 ACCENT = vec3(0.56, 0.83, 1.0), LUMA = vec3(0.299, 0.587, 0.114);
 const vec3 SOLAR = vec3(1.0, 0.70, 0.255), WIND = vec3(0.27, 0.83, 0.91), HYBRID = vec3(0.75, 0.55, 1.0);
 const vec3 PROTECT = vec3(0.37, 0.75, 0.48);
@@ -85,13 +91,16 @@ void main() {
   vec3 rel = texture2D(uRelief, vD).rgb;
   vec4 m = texture2D(uMask, vD);
   vec3 hot = texture2D(uHot, vD).rgb;
+  vec3 nm = texture2D(uNormal, vD).rgb;
+  float light = shadeAt(unpackNormal(nm.rg, ${SHADE_EXAG.toFixed(2)}), nm.b, uSun);
   float inside = smoothstep(0.25 * ID, 0.75 * ID, m.r);
-  float lum = dot(rel, LUMA);
+  float lum = dot(rel, LUMA) * light;
   vec3 col = rel;
 
   // resource drapes wipe in: solar from the south-west, wind from the west
   col = mix(col, texture2D(uSolar, vD).rgb, uSolarK * smoothstep(0.0, 0.08, uSolarWipe * 1.1 - (vD.x + 1.0 - vD.y) * 0.5));
   col = mix(col, texture2D(uWind, vD).rgb, uWindK * smoothstep(0.0, 0.08, uWindWipe * 1.1 - vD.x));
+  col *= light;
 
   // a quieter base for the grid and the hotspots
   col = mix(col, vec3(dot(col, LUMA)), 0.35 * uDim) * (1.0 - 0.38 * uDim);
@@ -118,27 +127,7 @@ void main() {
   float border = inR * inX * inY * max(step(0.5, abs(id - ix)), step(0.5, abs(id - iy)));
   col = mix(col, ACCENT, rim * uBorders * 0.85);
   col = mix(col, vec3(0.92, 0.95, 1.0), border * uBorders * 0.35);
-  gl_FragColor = vec4(col, uShow);
-}`;
-
-// The block's sides: from the terrain's edge down to a flat base, with faint strata.
-const wallVert = /* glsl */ `
-attribute float aTop, aElev;
-uniform float uLift, uDepth;
-varying float vZ, vTop;
-void main() {
-  vZ = aTop > 0.5 ? aElev * uLift : -uDepth;
-  vTop = aTop;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xy, vZ, 1.0);
-}`;
-const wallFrag = /* glsl */ `
-uniform float uShow, uDepth;
-varying float vZ, vTop;
-void main() {
-  vec3 col = mix(vec3(0.05, 0.07, 0.11), vec3(0.16, 0.19, 0.25), clamp((vZ + uDepth) / (uDepth + 0.05), 0.0, 1.0));
-  col += 0.05 * smoothstep(0.9, 1.0, fract(vZ * 140.0));
-  col += vec3(0.25, 0.4, 0.55) * 0.3 * smoothstep(0.9, 1.0, vTop); // lit lip along the top edge
-  gl_FragColor = vec4(col, uShow);
+  gl_FragColor = vec4(col, uShow * windowAt(vD));
 }`;
 
 // Grid lines: drawn on outward from Delhi, then pulses run along them. 765 kV coral, 400 kV amber, 220 kV pale.
@@ -147,7 +136,10 @@ attribute float aElev, aT, aKv;
 uniform float uLift, uDraw, uLines, uTime;
 varying vec3 vC;
 varying float vA;
+varying vec2 vUv;
+${MAP_UV}
 void main() {
+  vUv = mapUv(position.xy);
   vec3 c = aKv > 1.5 ? vec3(1.0, 0.48, 0.35) : aKv > 0.5 ? vec3(1.0, 0.82, 0.48) : vec3(0.85, 0.89, 0.95);
   float pulse = 1.0 + 0.7 * smoothstep(0.9, 1.0, sin(aT * 90.0 - uTime * 2.5));
   vC = c * pulse;
@@ -157,30 +149,37 @@ void main() {
 const lineFrag = /* glsl */ `
 varying vec3 vC;
 varying float vA;
-void main() { gl_FragColor = vec4(vC, vA); }`;
+varying vec2 vUv;
+${WINDOW}
+void main() { gl_FragColor = vec4(vC, vA * windowAt(vUv)); }`;
 
 // Substations pop in once the drawing wave reaches them; turbines twinkle.
 const pointVert = /* glsl */ `
 attribute float aElev, aT, aKv, aSeed;
-uniform float uLift, uDraw, uK, uTime, uPixelRatio, uSize, uTwinkle;
+uniform float uLift, uDraw, uK, uTime, uPixelRatio, uPoint, uTwinkle;
 uniform vec3 uColor;
 varying vec3 vC;
 varying float vA;
+varying vec2 vUv;
+${MAP_UV}
 void main() {
+  vUv = mapUv(position.xy);
   vC = aKv > 1.5 ? vec3(1.0, 0.48, 0.35) : aKv > 0.5 ? vec3(1.0, 0.82, 0.48) : uColor;
   vA = uK * smoothstep(0.0, 0.04, uDraw * 1.06 - aT - 0.02) * (1.0 - uTwinkle * 0.45 * (1.0 + sin(uTime * 3.0 + aSeed * 40.0)) * 0.5);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xy, aElev * uLift + 0.005, 1.0);
-  gl_PointSize = (uSize + 1.2 * aKv) * uPixelRatio;
+  gl_PointSize = (uPoint + 1.2 * aKv) * uPixelRatio;
 }`;
 const pointFrag = /* glsl */ `
 uniform float uRing;
 varying vec3 vC;
 varying float vA;
+varying vec2 vUv;
+${WINDOW}
 void main() {
   float d = length(gl_PointCoord - 0.5);
   if (d > 0.5) discard;
   vec3 c = mix(vC, vec3(0.03, 0.05, 0.08), uRing * smoothstep(0.3, 0.38, d));
-  gl_FragColor = vec4(c, vA * (1.0 - smoothstep(0.4, 0.5, d)));
+  gl_FragColor = vec4(c, vA * (1.0 - smoothstep(0.4, 0.5, d)) * windowAt(vUv));
 }`;
 
 // Instanced columns: solar plants (solid, rising by capacity) and hotspot beams (glowing, additive).
@@ -190,7 +189,10 @@ attribute float aH, aT, aKind;
 uniform float uLift, uWidth;
 uniform vec3 uRise;  // growth per kind: solar, wind, hybrid
 varying float vL, vTop, vKind, vA;
+varying vec2 vUv;
+${MAP_UV}
 void main() {
+  vUv = mapUv(aAt.xy);
   float rise = aKind > 1.5 ? uRise.z : aKind > 0.5 ? uRise.y : uRise.x;
   float grow = smoothstep(0.0, 0.3, rise * 1.3 - aT);
   vec3 p = vec3(aAt.xy + position.xy * uWidth, aAt.z * uLift + position.z * aH * grow);
@@ -203,15 +205,19 @@ void main() {
 const plantFrag = /* glsl */ `
 uniform float uK;
 varying float vL, vTop, vKind, vA;
-void main() { gl_FragColor = vec4(vec3(1.0, 0.70, 0.255) * vL * (0.7 + 0.5 * vTop), uK * vA); }`;
+varying vec2 vUv;
+${WINDOW}
+void main() { gl_FragColor = vec4(vec3(1.0, 0.70, 0.255) * vL * (0.7 + 0.5 * vTop), uK * vA * windowAt(vUv)); }`;
 const beamFrag = /* glsl */ `
 uniform vec3 uK;
 uniform float uTime;
 varying float vL, vTop, vKind, vA;
+varying vec2 vUv;
+${WINDOW}
 void main() {
   vec3 c = vKind > 1.5 ? vec3(0.75, 0.55, 1.0) : vKind > 0.5 ? vec3(0.27, 0.83, 0.91) : vec3(1.0, 0.70, 0.255);
   float k = vKind > 1.5 ? uK.z : vKind > 0.5 ? uK.y : uK.x;
-  gl_FragColor = vec4(c * 1.2, (1.0 - vTop) * (0.5 + 0.25 * sin(uTime * 3.0 - vTop * 8.0)) * k * vA);
+  gl_FragColor = vec4(c * 1.2, (1.0 - vTop) * (0.5 + 0.25 * sin(uTime * 3.0 - vTop * 8.0)) * k * vA * windowAt(vUv));
 }`;
 
 // Wind streaks: positions come from createStreaks() every frame.
@@ -219,53 +225,18 @@ const streakVert = /* glsl */ `
 attribute float aA;
 uniform float uK;
 varying float vA;
+varying vec2 vUv;
+${MAP_UV}
 void main() {
   vA = aA * uK;
+  vUv = mapUv(position.xy);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
 const streakFrag = /* glsl */ `
 varying float vA;
-void main() { gl_FragColor = vec4(0.62, 0.93, 1.0, vA); }`;
-
-async function loadDem(url, w, h, max) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
-  const raw = new Uint16Array(await res.arrayBuffer());
-  if (raw.length !== w * h) throw new Error(`${url}: ${raw.length} samples, expected ${w * h}`);
-  const norm = Float32Array.from(raw, (m) => m / max);
-  // bilinear height (0..1 of the highest peak) at u, v in 0..1
-  const at = (u, v) => {
-    const x = Math.min(Math.max(u, 0), 1) * (w - 1), y = Math.min(Math.max(v, 0), 1) * (h - 1);
-    const x0 = Math.min(w - 2, x | 0), y0 = Math.min(h - 2, y | 0), fx = x - x0, fy = y - y0, i = y0 * w + x0;
-    return (norm[i] * (1 - fx) + norm[i + 1] * fx) * (1 - fy) + (norm[i + w] * (1 - fx) + norm[i + w + 1] * fx) * fy;
-  };
-  return { norm, at };
-}
-
-// Four strips from the terrain's edge down to the base, walking round the map.
-function buildWalls(norm, w, h, size) {
-  const edges = [
-    Array.from({ length: w }, (_, i) => i),
-    Array.from({ length: h }, (_, j) => j * w + w - 1),
-    Array.from({ length: w }, (_, i) => (h - 1) * w + w - 1 - i),
-    Array.from({ length: h }, (_, j) => (h - 1 - j) * w),
-  ];
-  const pos = [], top = [], elev = [], index = [];
-  for (const e of edges) {
-    const first = pos.length / 3;
-    for (const k of e) {
-      const x = ((k % w) / (w - 1) - 0.5) * size.x, y = (0.5 - Math.floor(k / w) / (h - 1)) * size.y;
-      pos.push(x, y, 0, x, y, 0); top.push(1, 0); elev.push(norm[k], norm[k]);
-    }
-    for (let i = 0; i < e.length - 1; i++) {
-      const a = first + i * 2;
-      index.push(a, a + 1, a + 2, a + 2, a + 1, a + 3);
-    }
-  }
-  const g = geometry({ position: [pos, 3], aTop: [top, 1], aElev: [elev, 1] });
-  g.setIndex(index);
-  return g;
-}
+varying vec2 vUv;
+${WINDOW}
+void main() { gl_FragColor = vec4(0.62, 0.93, 1.0, vA * windowAt(vUv)); }`;
 
 // Line segments with their height and their distance from the hub (0..1) for the draw-on; far is the
 // largest distance in map units.
@@ -357,24 +328,26 @@ const gw = (x) => (x >= 10 ? Math.round(x) : x.toFixed(1)).toLocaleString("en-US
 export async function createEnergy(scene, dpr, stationZ) {
   const loader = new THREE.TextureLoader();
   const meta = await loadJson(`${BASE}ni-meta-${V}.json`);
-  const [dem, relief, solar, wind, mask, hot] = await Promise.all([
+  const [dem, relief, solar, wind, normal, mask, hot] = await Promise.all([
     loadDem(`${BASE}ni-dem-${V}.bin`, meta.dem.w, meta.dem.h, meta.dem.max),
-    ...["relief", "solar", "wind"].map((n) => loadImage(loader, `${BASE}ni-${n}-${V}.jpg`)),
+    ...["relief", "solar", "wind", "normal"].map((n) => loadImage(loader, `${BASE}ni-${n}-${V}.jpg`)),
     ...["mask", "hot"].map((n) => loadImage(loader, `${BASE}ni-${n}-${V}.png`))]);
   const size = new THREE.Vector2((MAP_H * meta.km[0]) / meta.km[1], MAP_H);
   const kmPerUnit = meta.km[1] / MAP_H;
   const uv = (p) => [p[0] / 1e4, p[1] / 1e4];
   const city = Object.fromEntries(meta.cities.map(([n, u, v]) => [n, uv([u, v])]));
   const hub = city[HUB] || [0.5, 0.5];
+  const ll = (lon, lat) => [(lon - meta.bbox[0]) / (meta.bbox[2] - meta.bbox[0]), (meta.bbox[3] - lat) / (meta.bbox[3] - meta.bbox[1])];
 
-  const shared = { uLift: { value: 0 }, uTime: { value: 0 }, uPixelRatio: { value: dpr } };
+  const shared = { uLift: { value: 0 }, uTime: { value: 0 }, uPixelRatio: { value: dpr }, uSize: { value: size },
+    uWin: { value: new THREE.Vector4(-1, -1, 2, 2) }, uFeather: { value: 0.1 } };
   const mat = (vertexShader, fragmentShader, uniforms, extra = {}) => new THREE.ShaderMaterial({
     vertexShader, fragmentShader, uniforms, transparent: true, depthWrite: false, ...extra });
 
   const [oriS, oriW, oriH] = ["solar", "wind", "hybrid"].map((k) => new THREE.Vector2(...uv(meta.hot[k][0].slice(1, 3))));
   const tu = {
     ...shared, uRelief: { value: relief }, uSolar: { value: solar }, uWind: { value: wind }, uMask: { value: mask },
-    uHot: { value: hot }, uMaskSize: { value: new THREE.Vector2(mask.image.width, mask.image.height) },
+    uHot: { value: hot }, uNormal: { value: normal }, uSun: { value: new THREE.Vector3() }, uMaskSize: { value: new THREE.Vector2(mask.image.width, mask.image.height) },
     uShow: { value: 0 }, uOut: { value: 0 }, uBorders: { value: 0 }, uSolarK: { value: 0 }, uSolarWipe: { value: 0 },
     uWindK: { value: 0 }, uWindWipe: { value: 0 }, uDim: { value: 0 }, uExcl: { value: 0 }, uAspect: { value: size.x / size.y },
     uHotK: { value: new THREE.Vector3() }, uRip: { value: new THREE.Vector3() },
@@ -383,18 +356,18 @@ export async function createEnergy(scene, dpr, stationZ) {
   const terrain = new THREE.Mesh(
     new THREE.PlaneGeometry(size.x, size.y, meta.dem.w - 1, meta.dem.h - 1).setAttribute("aElev", new THREE.BufferAttribute(dem.norm, 1)),
     mat(terrainVert, terrainFrag, tu, { depthWrite: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
-  const wu = { ...shared, uShow: tu.uShow, uDepth: { value: DEPTH } };
+  const wu = { ...shared, uShow: { value: 0 }, uDepth: { value: DEPTH } };
   const walls = new THREE.Mesh(buildWalls(dem.norm, meta.dem.w, meta.dem.h, size),
     mat(wallVert, wallFrag, wu, { depthWrite: true, side: THREE.DoubleSide }));
 
   const grid = buildLines(meta.lines, dem.at, size, hub), far = grid.far;
   const lu = { ...shared, uDraw: { value: 0 }, uLines: { value: 0 } };
   const lines = new THREE.LineSegments(grid.geometry, mat(lineVert, lineFrag, lu));
-  const su = { ...shared, uDraw: lu.uDraw, uK: { value: 0 }, uSize: { value: 2.6 }, uTwinkle: { value: 0 },
+  const su = { ...shared, uDraw: lu.uDraw, uK: { value: 0 }, uPoint: { value: 2.6 }, uTwinkle: { value: 0 },
     uColor: { value: new THREE.Vector3(0.92, 0.95, 1.0) }, uRing: { value: 1 } };
   const subs = new THREE.Points(buildPoints(meta.subs.map(([u, v, kv]) => [u / 1e4, v / 1e4, kvClass(kv)]), dem.at, size, hub, far),
     mat(pointVert, pointFrag, su));
-  const tbu = { ...shared, uDraw: { value: 1 }, uK: { value: 0 }, uSize: { value: 2.4 }, uTwinkle: { value: 1 },
+  const tbu = { ...shared, uDraw: { value: 1 }, uK: { value: 0 }, uPoint: { value: 2.4 }, uTwinkle: { value: 1 },
     uColor: { value: new THREE.Vector3(0.27, 0.83, 0.91) }, uRing: { value: 0 } };
   const turbines = new THREE.Points(buildPoints(meta.turbines.map(([u, v]) => [u / 1e4, v / 1e4, 0]), dem.at, size, hub, Infinity),
     mat(pointVert, pointFrag, tbu));
@@ -414,7 +387,7 @@ export async function createEnergy(scene, dpr, stationZ) {
     mat(columnVert, beamFrag, bu, { side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
 
   const streaks = createStreaks(meta.wind, STREAKS, size, dem.at);
-  const ku = { uK: { value: 0 } };
+  const ku = { ...shared, uK: { value: 0 } };
   const streakLines = new THREE.LineSegments(streaks.geometry, mat(streakVert, streakFrag, ku, { blending: THREE.AdditiveBlending }));
 
   const clearer = depthClearer();
@@ -424,9 +397,33 @@ export async function createEnergy(scene, dpr, stationZ) {
   const group = new THREE.Group();
   group.add(...drawn);
   scene.add(group);
-  const fit = makeFitter(group, size);
-  let fitted = false;
-  const prevPos = new THREE.Vector3();
+  const rig = makeRig(group, size, dem.at, shared);
+
+  // camera moves, stage by stage: each stage's view is reached early in the stage and held while the
+  // model turns slowly, or runs from a first view to a second
+  const S = STAGES;
+  const WHOLE = { c: [0.5, 0.5], z: 1, tilt: TILT, yaw: 0, e: 1 };
+  const look = (c, z, tilt, yaw) => ({ c, z, tilt, yaw, e: 1 });
+  const framed = (kind, n, pad, zMax, tilt, yaw) =>
+    ({ ...frame(meta.hot[kind].slice(0, n).map((h) => uv(h.slice(1, 3))), pad, zMax), tilt, yaw, e: 1 });
+  const turn = (v, d) => ({ ...v, yaw: v.yaw + d });
+  const ARRIVE = 0.035, TURN = 0.035;
+  const stageViews = [
+    null,                                                    // 0: tilts up from flat, below
+    { ...WHOLE, tilt: -0.75, yaw: -0.08 },                   // 1: solar yield across the region
+    look(ll(74.0, 30.0), 1.3, -0.78, 0.1),                   // 2: wind, the western Thar and Himalaya
+    [look(hub, 2.2, -0.85, -0.1), { ...WHOLE, yaw: 0.04 }],  // 3: the grid, out from Delhi
+    { ...WHOLE, tilt: -0.62, yaw: 0.02 },                    // 4: land off limits, flatter to read
+    framed("solar", 5, 0.08, 3, -0.72, -0.12),               // 5-7: the hotspots
+    framed("wind", 4, 0.07, 3, -0.66, 0.14),
+    framed("hybrid", 5, 0.06, 4, -0.6, -0.04),
+  ];
+  const keys = [[0, { ...WHOLE, tilt: FACE_TILT, yaw: -TURN }], [S[1] * 0.8, WHOLE], [S[1] - 0.005, turn(WHOLE, TURN)]];
+  for (let k = 1; k < stageViews.length; k++) {
+    const v = stageViews[k], [a, b] = Array.isArray(v) ? v : [turn(v, -TURN), turn(v, TURN)];
+    keys.push([S[k] + ARRIVE, a], [S[k + 1] - 0.005, b]);
+  }
+  const views = makeViews(keys);
 
   // Labels, highest priority first: a label that would overlap one already placed is skipped.
   const labels = [];
@@ -444,7 +441,8 @@ export async function createEnergy(scene, dpr, stationZ) {
 
   const pinStart = stationZ + P.researchView;
   const pinEnd = pinStart - P.researchPin;
-  let form = 0, q = 0;
+  let form = 0, q = 0, cur = WHOLE;
+  const sun = tu.uSun.value;
 
   return {
     pinStart, pinEnd,
@@ -453,28 +451,19 @@ export async function createEnergy(scene, dpr, stationZ) {
       const want = camZ <= stationZ + 6.6 && camZ >= pinEnd - 1.0;
       form = Math.max(0, Math.min(1, form + (want ? dt / 1.1 : -dt / 1.4)));
       group.visible = form > 0.001;
-      if (!group.visible) { fitted = false; return q; } // snap to a fresh fit on re-entry
+      if (!group.visible) { rig.reset(); return q; } // snap to a fresh fit on re-entry
 
-      const S = STAGES;
-      const tilt = ramp(q, 0, S[1] * 0.8);
-      const lift = LIFT * ramp(q, 0.01, S[1]);
-      group.rotation.x = FACE_TILT + (TILT - FACE_TILT) * tilt;
-      group.rotation.z = YAW * (2 * q - 1) * tilt;
+      cur = views(q);
+      const lift = LIFT * cur.e * ramp(q, 0.01, S[1]);
       shared.uLift.value = lift;
       shared.uTime.value = time;
-
-      // refit every frame (scroll speed zooms the camera) and ease toward the fit so it never jumps
+      // refit every frame (scroll speed zooms the camera)
       const clamped = Math.min(Math.max(camZ, pinEnd), pinStart);
-      const prevScale = group.scale.x;
-      prevPos.copy(group.position);
-      fit(camera, clamped - camZ, clamped - P.researchView, lift);
-      const k = fitted ? 1 - Math.exp(-dt * 5) : 1;
-      group.scale.setScalar(prevScale + (group.scale.x - prevScale) * k);
-      group.position.x = prevPos.x + (group.position.x - prevPos.x) * k;
-      group.position.y = prevPos.y + (group.position.y - prevPos.y) * k;
-      fitted = true;
+      rig.update(cur, camera, clamped - camZ, clamped - P.researchView, lift, dt);
+      sunAt(q, time, sun);
 
       tu.uShow.value = form;
+      wu.uShow.value = form * (1 - ramp(cur.z, 1.01, 1.1)); // the block's sides only when it is seen whole
       tu.uOut.value = ramp(q, 0, 0.05);
       tu.uBorders.value = ramp(q, 0.01, 0.06);
       tu.uSolarK.value = during(q, 1);
@@ -501,6 +490,7 @@ export async function createEnergy(scene, dpr, stationZ) {
       plants.visible = pu.uK.value > 0.002;
       beams.visible = bu.uK.value.x + bu.uK.value.y + bu.uK.value.z > 0.002;
       streakLines.visible = ku.uK.value > 0.002;
+      walls.visible = wu.uShow.value > 0.002;
       if (streakLines.visible) streaks.update(dt, lift, time);
       return q;
     },
@@ -509,26 +499,28 @@ export async function createEnergy(scene, dpr, stationZ) {
       if (!group.visible) return null;
       group.updateMatrixWorld();
       const lift = shared.uLift.value, placed = [];
+      const box = fitBox(), W = innerWidth, H = innerHeight, top = box.y0 * H + 12;
       const out = labels.map((l) => {
         const a = form * Math.min(1, l.a(q)), hidden = { name: l.name, cls: l.cls, x: 0, y: 0, a: 0 };
-        if (a <= 0.004) return hidden;
+        if (a <= 0.004 || !rig.sees(l.u, l.v)) return hidden;
         const p = screenOf(group, (l.u - 0.5) * size.x, (0.5 - l.v) * size.y, dem.at(l.u, l.v) * lift + l.h() + 0.01, camera);
         if (!p) return hidden;
+        const y = Math.max(p[1], top); // the label of a beam taller than the free area stays below the HUD
         const big = l.cls === "big state", w = big ? l.name.length * 9 : 16 + l.name.length * 8.5;
         const x0 = big ? p[0] - w / 2 : p[0] - 6;
-        if (placed.some(([bx, by, bw]) => x0 < bx + bw && x0 + w > bx && Math.abs(p[1] - by) < 18)) return hidden;
-        placed.push([x0, p[1], w]);
-        return { name: l.name, cls: l.cls, x: p[0], y: p[1], a };
+        if (placed.some(([bx, by, bw]) => x0 < bx + bw && x0 + w > bx && Math.abs(y - by) < 18)) return hidden;
+        placed.push([x0, y, w]);
+        return { name: l.name, cls: l.cls, x: p[0], y, a };
       });
-      // north: the map's own +y on screen, foreshortened by the tilt
-      const o = screenOf(group, 0, 0, 0, camera), n = screenOf(group, 0, 0.1, 0, camera), e = screenOf(group, 0.1, 0, 0, camera);
+      // north: the map's own +y on screen at the centre of the view, foreshortened by the tilt
+      const d = 0.1 / cur.z, cx = (cur.c[0] - 0.5) * size.x, cy = (0.5 - cur.c[1]) * size.y, cz = dem.at(cur.c[0], cur.c[1]) * lift;
+      const o = screenOf(group, cx, cy, cz, camera), n = screenOf(group, cx, cy + d, cz, camera), e = screenOf(group, cx + d, cy, cz, camera);
       if (!o || !n || !e) return { labels: out, north: null, scale: null };
       const nx = n[0] - o[0], ny = n[1] - o[1], ex = Math.hypot(e[0] - o[0], e[1] - o[1]);
-      const box = fitBox(), W = innerWidth, H = innerHeight;
       const north = { x: box.x1 * W - 26, y: box.y0 * H + 26, rot: Math.atan2(nx, -ny),
         sy: Math.max(0.35, Math.min(1, Math.hypot(nx, ny) / ex)), a: form };
-      // scale bar: east-west at the map centre, where the tilt does not shorten it
-      const pxPerKm = ex / (0.1 * kmPerUnit);
+      // scale bar: east-west at the centre of the view, where the tilt does not shorten it
+      const pxPerKm = ex / (d * kmPerUnit);
       let km = SCALE_KM[0];
       for (const c of SCALE_KM) if (c * pxPerKm <= SCALE_PX) km = c;
       const scale = { x: box.x0 * W + 6, y: box.y1 * H - 30, w: km * pxPerKm, text: `${km} km`, a: form };

@@ -7,6 +7,7 @@ import { createAmbience } from "./audio.js";
 import { splitInto, blockInto, show, hide, swapper, makeLabel, makeTicks, magnet, makeResearchHud } from "./ui.js";
 import { createResearch, RESEARCH_STAGES, EQ_TERMS, stageOf, subOf } from "./research.js";
 import { createEnergy, ENERGY_STAGES, energyStageOf } from "./energy.js";
+import { createHimachal, HIMACHAL_STAGES, himachalStageOf, himachalSubOf } from "./himachal.js";
 import { STATIONS, OUTRO } from "./content.js";
 
 const FONT = "'Overused Grotesk', system-ui, sans-serif";
@@ -22,7 +23,7 @@ const audio = createAmbience();
 // ---------------- stations ----------------
 const loader = new THREE.TextureLoader();
 const tex = (url) => loader.load(url);
-const isMapStop = (s) => Boolean(s.research || s.energy); // pinned stops with their own HUD
+const isMapStop = (s) => Boolean(s.research || s.energy || s.himachal); // pinned stops with their own HUD
 const defs = STATIONS.map((s) => isMapStop(s) ? { kind: "none" } : s.glass
   ? { kind: "glass", texture: s.glass === "dizzy" ? dizzyTexture() : tex(s.glass) }
   : { kind: "glyph", glyph: s.glyph, height: s.glyphHeight });
@@ -45,14 +46,21 @@ const stationZ = STATIONS.map((_, i) => P.statFirstZ - i * P.statSpacing);
 // stages get room to play out. Each pin covers flight distance da..db and scroll sa..sb.
 const RS_Z = stationZ[STATIONS.findIndex((s) => s.research)];
 const EN_Z = stationZ[STATIONS.findIndex((s) => s.energy)];
+const HP_Z = stationZ[STATIONS.findIndex((s) => s.himachal)];
+// A map stop that fails to load loses its pin, so the flight never crawls through empty space.
 const K = P.scrollSpeed;
-const PINS = [];
-STATIONS.forEach((s, i) => {
-  if (!isMapStop(s)) return;
-  const prev = PINS[PINS.length - 1] || { db: 0, sb: 0 };
-  const da = CAM0 - (stationZ[i] + P.researchView), sa = prev.sb + (da - prev.db) / K;
-  PINS.push({ da, db: da + P.researchPin, sa, sb: sa + P.researchPin / (K * P.researchDwell) });
-});
+const lost = new Set(); // station indices of map stops that failed to load
+let PINS = [];
+function buildPins() {
+  PINS = [];
+  STATIONS.forEach((s, i) => {
+    if (!isMapStop(s) || lost.has(i)) return;
+    const prev = PINS[PINS.length - 1] || { db: 0, sb: 0 };
+    const da = CAM0 - (stationZ[i] + P.researchView), sa = prev.sb + (da - prev.db) / K;
+    PINS.push({ da, db: da + P.researchPin, sa, sb: sa + P.researchPin / (K * P.researchDwell) });
+  });
+}
+buildPins();
 function distFor(s) {
   let prev = { db: 0, sb: 0 };
   for (const p of PINS) {
@@ -71,7 +79,7 @@ function scrollFor(d) {
   }
   return prev.sb + (d - prev.db) / K;
 }
-const MAX_SCROLL = scrollFor(-(P.outroButtonZ - 12));
+let MAX_SCROLL = scrollFor(-(P.outroButtonZ - 12));
 
 const leftHint = swapper($("hint"));
 const audioLabel = swapper($("audioLabel"));
@@ -81,6 +89,7 @@ const ticks = makeTicks($("ticks"), STATIONS.length, (i) => {
 const huds = {
   research: makeResearchHud($("research"), RESEARCH_STAGES, EQ_TERMS, stageOf, subOf),
   energy: makeResearchHud($("energy"), ENERGY_STAGES, [], energyStageOf, () => -1),
+  himachal: makeResearchHud($("himachal"), HIMACHAL_STAGES, [], himachalStageOf, himachalSubOf),
 };
 
 // hero
@@ -206,7 +215,7 @@ function frame(now) {
     const q = stop.update(dt, camZ, time, world.camera);
     const on = introDone && camZ <= stop.pinStart + 1.2 && camZ >= stop.pinEnd - 0.5;
     if (on) pinned = true;
-    hud.update(on, q, dt, stop.mag ? stop.mag() : 0);
+    hud.update(on, q, dt, stop.live ? stop.live() : 0);
     hud.place(stop.overlay(world.camera));
   }
   calm += ((pinned ? 1 : 0) - calm) * Math.min(1, dt * CALM_RATE); // read by the next frame's world.update
@@ -238,7 +247,7 @@ function frame(now) {
   }
   ticks.update(fIndex, introDone && tunnel < 0.02, now);
 
-  const hint = camZ > 2.5 ? START_HINT : camZ > stationZ[5] - 3 ? "Keep going" : "Almost there";
+  const hint = camZ > 2.5 ? START_HINT : camZ > stationZ[6] - 3 ? "Keep going" : "Almost there";
   if (introDone && hint !== hintState) { hintState = hint; leftHint(hint); }
   updateOutro(camZ, now, dt);
 
@@ -251,6 +260,15 @@ addEventListener("resize", resize);
 resize();
 
 // ---------------- boot ----------------
+// A map stop that failed to load: drop its pin and keep the camera where it is.
+function dropPin(key) {
+  const at = distFor(smooth), to = distFor(target);
+  lost.add(STATIONS.findIndex((s) => s[key]));
+  buildPins();
+  MAX_SCROLL = scrollFor(-(P.outroButtonZ - 12));
+  smooth = scrollFor(at);
+  target = Math.min(MAX_SCROLL, scrollFor(to));
+}
 const pct = $("loaderPct"), bar = $("loaderBar");
 async function boot() {
   const t0 = performance.now();
@@ -258,10 +276,15 @@ async function boot() {
   (async () => {
     try { await document.fonts.load(`500 220px ${FONT}`); await document.fonts.load(`400 18px ${FONT}`); } catch { /* fallback font */ }
     stations = createStations(world.scene, defs, FONT, world.dpr);
-    try { stops.push({ stop: await createResearch(world.scene, world.dpr, RS_Z), hud: huds.research }); } catch (err) { console.error("research stop unavailable", err); }
+    const load = async (key, create, z) => {
+      try { stops.push({ stop: await create(world.scene, world.dpr, z), hud: huds[key] }); }
+      catch (err) { console.error(`${key} stop unavailable`, err); dropPin(key); }
+    };
+    await load("research", createResearch, RS_Z);
     ready = true;
     // later in the flight, so it loads after the page is up
-    try { stops.push({ stop: await createEnergy(world.scene, world.dpr, EN_Z), hud: huds.energy }); } catch (err) { console.error("energy stop unavailable", err); }
+    await load("energy", createEnergy, EN_Z);
+    await load("himachal", createHimachal, HP_Z);
   })();
   requestAnimationFrame(frame);
   await new Promise((done) => {

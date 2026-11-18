@@ -1,5 +1,6 @@
-// Shared pieces of the pinned map stops (research.js, energy.js): easing, screen mapping, loading,
-// fitting the map into the free screen area, and the depth clear that keeps the flight terrain out.
+// Shared pieces of the pinned map stops (research.js, energy.js, himachal.js): easing, screen mapping,
+// loading, the block's walls, fitting the map into the free screen area, keyframed camera moves,
+// relighting by a moving sun, and the depth clear that keeps the flight terrain out.
 import * as THREE from "three";
 import { P } from "./config.js";
 
@@ -41,13 +42,77 @@ export async function loadImage(loader, url) {
   return t;
 }
 
+// A Uint16 elevation grid (metres, row 0 north), normalised to 0..1 of max, with bilinear lookup.
+// step > 1 keeps every step-th sample in both directions (a lighter mesh for phones).
+export async function loadDem(url, w, h, max, step = 1) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+  const raw = new Uint16Array(await res.arrayBuffer());
+  if (raw.length !== w * h) throw new Error(`${url}: ${raw.length} samples, expected ${w * h}`);
+  const W = Math.ceil(w / step), H = Math.ceil(h / step), norm = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) norm[y * W + x] = raw[y * step * w + x * step] / max;
+  // bilinear height (0..1 of the highest peak) at u, v in 0..1
+  const at = (u, v) => {
+    const x = Math.min(Math.max(u, 0), 1) * (W - 1), y = Math.min(Math.max(v, 0), 1) * (H - 1);
+    const x0 = Math.min(W - 2, x | 0), y0 = Math.min(H - 2, y | 0), fx = x - x0, fy = y - y0, i = y0 * W + x0;
+    return (norm[i] * (1 - fx) + norm[i + 1] * fx) * (1 - fy) + (norm[i + W] * (1 - fx) + norm[i + W + 1] * fx) * fy;
+  };
+  return { norm, at, w: W, h: H };
+}
+
+// Four strips from the terrain's edge down to the base, walking round the map.
+export function buildWalls(norm, w, h, size) {
+  const edges = [
+    Array.from({ length: w }, (_, i) => i),
+    Array.from({ length: h }, (_, j) => j * w + w - 1),
+    Array.from({ length: w }, (_, i) => (h - 1) * w + w - 1 - i),
+    Array.from({ length: h }, (_, j) => (h - 1 - j) * w),
+  ];
+  const pos = [], top = [], elev = [], index = [];
+  for (const e of edges) {
+    const first = pos.length / 3;
+    for (const k of e) {
+      const x = ((k % w) / (w - 1) - 0.5) * size.x, y = (0.5 - Math.floor(k / w) / (h - 1)) * size.y;
+      pos.push(x, y, 0, x, y, 0); top.push(1, 0); elev.push(norm[k], norm[k]);
+    }
+    for (let i = 0; i < e.length - 1; i++) {
+      const a = first + i * 2;
+      index.push(a, a + 1, a + 2, a + 2, a + 1, a + 3);
+    }
+  }
+  const g = geometry({ position: [pos, 3], aTop: [top, 1], aElev: [elev, 1] });
+  g.setIndex(index);
+  return g;
+}
+
+// The block's sides: from the terrain's edge down to a flat base, with faint strata.
+export const wallVert = /* glsl */ `
+attribute float aTop, aElev;
+uniform float uLift, uDepth;
+varying float vZ, vTop;
+void main() {
+  vZ = aTop > 0.5 ? aElev * uLift : -uDepth;
+  vTop = aTop;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xy, vZ, 1.0);
+}`;
+export const wallFrag = /* glsl */ `
+uniform float uShow, uDepth;
+varying float vZ, vTop;
+void main() {
+  vec3 col = mix(vec3(0.05, 0.07, 0.11), vec3(0.16, 0.19, 0.25), clamp((vZ + uDepth) / (uDepth + 0.05), 0.0, 1.0));
+  col += 0.05 * smoothstep(0.9, 1.0, fract(vZ * 140.0));
+  col += vec3(0.25, 0.4, 0.55) * 0.3 * smoothstep(0.9, 1.0, vTop); // lit lip along the top edge
+  gl_FragColor = vec4(col, uShow);
+}`;
+
 // Scales and centres the map so its relief at the given lift fits the free screen area, as seen
 // from the camera's pinned position (the map is pinned relative to the camera while the stop plays).
+// focus (optional): fit only part of the map, { x, y, w, h } in map units (centre and size), with the
+// relief between heights lo and hi (0..1 of the lift) instead of 0..1.
 export function makeFitter(group, size) {
-  const corners = [];
-  for (const x of [-0.5, 0.5]) for (const y of [-0.5, 0.5]) for (const z of [0, 1]) corners.push(new THREE.Vector3(x * size.x, y * size.y, z));
   const cam = new THREE.PerspectiveCamera(), p = new THREE.Vector3();
-  return (camera, camShift, z, lift) => {
+  return (camera, camShift, z, lift, focus = null) => {
+    const f = focus || { x: 0, y: 0, w: size.x, h: size.y, lo: 0, hi: 1 };
     cam.copy(camera);
     cam.position.z += camShift;
     cam.updateMatrixWorld(true);
@@ -57,8 +122,8 @@ export function makeFitter(group, size) {
     for (let iter = 0; iter < 6; iter++) {
       group.updateMatrixWorld(true);
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-      for (const c of corners) {
-        p.set(c.x, c.y, c.z * lift).applyMatrix4(group.matrixWorld).project(cam);
+      for (const sx of [-0.5, 0.5]) for (const sy of [-0.5, 0.5]) for (const h of [f.lo, f.hi]) {
+        p.set(f.x + sx * f.w, f.y + sy * f.h, h * lift).applyMatrix4(group.matrixWorld).project(cam);
         x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
       }
       group.scale.multiplyScalar(Math.min(tw / (x1 - x0), th / (y1 - y0)));
@@ -67,6 +132,131 @@ export function makeFitter(group, size) {
       group.position.y += (ty - (y0 + y1) / 2) * halfH;
     }
   };
+}
+
+// Camera moves for a pinned map. keys: [[q, view], ...] in q order, view = { c: [u, v] focus centre in
+// map uv (v = 0 north), z: zoom (1 = the whole map), tilt (radians, negative tips north away), yaw
+// (radians), e: lift multiplier }. Between two keys the view eases; zoom runs linearly in log z about
+// the one map point that stays put on screen, so each move reads as a single dive. Hold a view by
+// repeating it.
+export function makeViews(keys) {
+  return (q) => {
+    let i = 0;
+    while (i < keys.length - 2 && q > keys[i + 1][0]) i++;
+    const [qa, a] = keys[i], [qb, b] = keys[Math.min(i + 1, keys.length - 1)];
+    const t = qb > qa ? smooth((q - qa) / (qb - qa)) : 1;
+    const mix = (x, y) => x + (y - x) * t;
+    const la = Math.log(a.z), lb = Math.log(b.z), z = Math.exp(mix(la, lb));
+    let c;
+    if (Math.abs(lb - la) < 1e-3) c = [mix(a.c[0], b.c[0]), mix(a.c[1], b.c[1])];
+    else {
+      // fixed point p: (p - ca) za = (p - cb) zb; then c(t) = p - (p - ca) za / z
+      const k = a.z / z;
+      c = [0, 1].map((j) => { const p = (b.c[j] * b.z - a.c[j] * a.z) / (b.z - a.z); return p - (p - a.c[j]) * k; });
+    }
+    return { c, z, tilt: mix(a.tilt, b.tilt), yaw: mix(a.yaw, b.yaw), e: mix(a.e ?? 1, b.e ?? 1) };
+  };
+}
+
+// Lighting by a moving sun. relight: for a terrain colour that already carries the light of one sun (a
+// satellite image), divide that light out and light the surface again from another direction; k is how
+// much of the new light to apply (0 leaves the colour as it is). shadeAt: the light on an unlit colour,
+// 1 on flat open ground. n: unit normal; sky: sky-view factor 0..1; sun0: the baked sun, sun: the new
+// one (unit vectors, map frame).
+export const RELIGHT = /* glsl */ `
+float occlusion(float sky) { return mix(1.0, 0.45 + 0.55 * sky, 0.7); }
+vec3 relight(vec3 col, vec3 n, float sky, vec3 sun0, vec3 sun, float k) {
+  float was = 0.38 + 0.62 * max(dot(n, sun0), 0.0);
+  float now = 0.38 + 0.62 * max(dot(n, sun), 0.0);
+  vec3 lit = col * clamp(now / was, 0.45, 1.9) * occlusion(sky);
+  return mix(col, lit, k);
+}
+float shadeAt(vec3 n, float sky, vec3 sun) {
+  return (0.38 + 0.62 * max(dot(n, sun), 0.0)) / (0.38 + 0.62 * max(sun.z, 0.0)) * occlusion(sky);
+}
+// Unit normal from a normal map texel: xy in rg (0.5 = flat), scaled by exag for steeper shading.
+vec3 unpackNormal(vec2 rg, float exag) {
+  vec2 xy = rg * 2.0 - 1.0;
+  float z = sqrt(max(1.0 - dot(xy, xy), 0.0));
+  return normalize(vec3(xy * exag, z));
+}`;
+
+// Sun direction in the map frame (x east, y north, z up) from azimuth (degrees clockwise from north)
+// and elevation (degrees).
+export function sunDir(azimuth, elevation, out = new THREE.Vector3()) {
+  const a = (azimuth * Math.PI) / 180, e = (elevation * Math.PI) / 180;
+  return out.set(Math.sin(a) * Math.cos(e), Math.cos(a) * Math.cos(e), Math.sin(e));
+}
+// The sun crossing the southern sky over a stop's progress q, with a slow drift in time.
+export const SUN_ELEVATION = 34;
+export const sunAt = (q, time, out) => sunDir(105 + 150 * q + 6 * Math.sin(time * 0.15), SUN_ELEVATION, out);
+
+// The visible window of a zoomed map: positions outside the focus box fade out. Every layer's fragment
+// shader includes this and multiplies its alpha by windowAt(map uv).
+export const WINDOW = /* glsl */ `
+uniform vec4 uWin;      // u0, v0, u1, v1 of the window in map uv (v = 0 north)
+uniform float uFeather;
+float windowAt(vec2 p) {
+  vec2 d = max(uWin.xy - p, p - uWin.zw);
+  return 1.0 - smoothstep(-uFeather, 0.0, max(d.x, d.y));
+}`;
+// Map uv of a position in map units, for the layers' vertex shaders (uSize: the map's size).
+export const MAP_UV = /* glsl */ `
+uniform vec2 uSize;
+vec2 mapUv(vec2 p) { return vec2(p.x / uSize.x + 0.5, 0.5 - p.y / uSize.y); }`;
+
+const MARGIN = 0.35;   // the window reaches this share of the focus box past its edges
+const FEATHER = 0.35;  // and fades out over this share
+
+// The camera of a pinned map, run once a frame: tilts and turns the map to the view (from makeViews),
+// sets the window round the view's focus box (win: the shared uWin and uFeather uniforms) and fits that
+// box, relief included, to the free screen area, easing toward the fit so scrolling never makes it jump.
+// at(u, v): ground height 0..1 of the lift.
+export function makeRig(group, size, at, win) {
+  const fit = makeFitter(group, size), prev = new THREE.Vector3();
+  let fitted = false;
+  // lowest and highest ground inside a uv box
+  const range = (u0, v0, u1, v1) => {
+    let lo = 1, hi = 0;
+    for (let i = 0; i <= 12; i++) for (let j = 0; j <= 12; j++) {
+      const h = at(u0 + ((u1 - u0) * i) / 12, v0 + ((v1 - v0) * j) / 12);
+      lo = Math.min(lo, h); hi = Math.max(hi, h);
+    }
+    return [lo, hi];
+  };
+  return {
+    // snap to a fresh fit next time (call when the stop is hidden)
+    reset() { fitted = false; },
+    update(view, camera, camShift, z, lift, dt) {
+      group.rotation.x = view.tilt;
+      group.rotation.z = view.yaw;
+      const hw = 0.5 / view.z, [cx, cy] = view.c, zoomed = view.z > 1.02;
+      const [lo, hi] = zoomed ? range(cx - hw, cy - hw, cx + hw, cy + hw) : [0, 1];
+      const m = zoomed ? hw * (1 + MARGIN) : 1;
+      win.uWin.value.set(cx - m, cy - m, cx + m, cy + m);
+      win.uFeather.value = zoomed ? hw * FEATHER : 0.05;
+      const s0 = group.scale.x;
+      prev.copy(group.position);
+      fit(camera, camShift, z, lift, { x: (cx - 0.5) * size.x, y: (0.5 - cy) * size.y, w: size.x / view.z, h: size.y / view.z, lo, hi });
+      const k = fitted ? 1 - Math.exp(-dt * 5) : 1;
+      group.scale.setScalar(s0 + (group.scale.x - s0) * k);
+      group.position.x = prev.x + (group.position.x - prev.x) * k;
+      group.position.y = prev.y + (group.position.y - prev.y) * k;
+      fitted = true;
+    },
+    // whether a map uv point is inside the window, short of its faded edge (labels outside are hidden)
+    sees(u, v) {
+      const w = win.uWin.value, f = win.uFeather.value / 2;
+      return u >= w.x + f && u <= w.z - f && v >= w.y + f && v <= w.w - f;
+    },
+  };
+}
+
+// A view framing uv points: centre and zoom so their box, padded, fills the focus box (at most zMax).
+export function frame(points, pad = 0.05, zMax = 4) {
+  const us = points.map((p) => p[0]), vs = points.map((p) => p[1]);
+  const u0 = Math.min(...us), u1 = Math.max(...us), v0 = Math.min(...vs), v1 = Math.max(...vs);
+  return { c: [(u0 + u1) / 2, (v0 + v1) / 2], z: Math.min(zMax, 1 / (Math.max(u1 - u0, v1 - v0) + 2 * pad)) };
 }
 
 // Drawn after the world, on a cleared depth buffer, so the flight terrain never cuts into the map.

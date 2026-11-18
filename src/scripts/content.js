@@ -21,6 +21,8 @@ export const STATIONS = [
     glyph: "HP", title: "Himachal", sup: "(→PwC)",
     caption: "Advanced degrees in Geography and Remote Sensing. A special knack for planet Earth: curious about how large systems work, and how they ripple down to shape smaller systems and the people who live within them.",
   },
+  // Himachal stop: rendered by himachal.js with its own HUD instead of a label.
+  { himachal: true, title: "Himachal from orbit" },
   {
     glyph: "🐕", glyphHeight: 2.4, pre: "Top companion", title: "My dog",
     caption: "And yes, I love my dog.",

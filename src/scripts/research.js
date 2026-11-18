@@ -6,19 +6,24 @@
 //   neugal-dem.bin      DEM, D8 drainage and RUSLE layers (see research-data.js)
 //   osm.json            { lines: {road_major, road_minor, ...}, places: [[u, v, risk]], labels, stats }
 //   context.json, world-land.png, hp-relief.jpg   the zoom context (see research-map.js)
-//   neugal-relief.jpg   natural-colour shaded relief of the watershed box
+//   neugal-albedo-v2.jpg   unlit natural colour of the watershed box
+//   neugal-normal-v2.jpg   R, G terrain normal x (east) and y (north), B sky-view factor: lit here by a moving sun
 //   neugal-mask.png     R stream lines, G Strahler order / 7, B watershed field (0.5 on the boundary)
 import * as THREE from "three";
 import { P } from "./config.js";
 import { loadWatershed, createRunoff } from "./research-data.js";
 import { R_KM, loadContext, zoomView, createZoomMap } from "./research-map.js";
-import { fitBox, smooth, ramp, win, geometry, loadJson, loadImage, makeFitter, depthClearer, makeScreenOf } from "./stop-kit.js";
+import { fitBox, smooth, ramp, win, geometry, loadJson, loadImage, depthClearer, makeScreenOf, makeViews, makeRig, frame,
+  RELIGHT, WINDOW, MAP_UV, sunDir, sunAt } from "./stop-kit.js";
 
 const BASE = "/research/";
 const MAP_H = 1.9;          // map height in world units before fitting to the screen
 const LIFT = 0.3;           // full relief height: 1.5x vertical exaggeration of the real terrain
+const SHADE_EXAG = 1.5;     // the normal map's slopes steepened as much as the relief
 const FACE_TILT = -0.2;     // flat map square to the camera, which looks down about 11 degrees
 const TILT = -0.72;         // north tilted away from the viewer, like a relief model on a table
+// the light baked into the zoom's Himachal and Kangra reliefs, which the valley matches until it tilts up
+const ZOOM_SUN = sunDir(315, 42);
 const SMALL = matchMedia("(max-width: 768px)").matches;
 const RAIN = SMALL ? 500 : 900;
 const RUNOFF = SMALL ? 1600 : 3000;
@@ -73,9 +78,10 @@ void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xy, aElev * uLift, 1.0);
 }`;
 
-// Natural-colour relief with one layer on top at a time: streams, a RUSLE factor, risk classes.
+// Natural-colour relief, lit by the sun, with one layer on top at a time: streams, a RUSLE factor, risk classes.
 const terrainFrag = /* glsl */ `
-uniform sampler2D uRelief, uMask, uDist, uLA, uLB;
+uniform sampler2D uRelief, uNormal, uMask, uDist, uLA, uLB;
+uniform vec3 uSun;
 uniform vec4 uWa;   // R, K, LS, C
 uniform vec4 uWb;   // P, risk classes, high risk, critical
 uniform float uShow, uOut, uRivers, uReveal, uFlow, uWet, uTime, uDistKm;
@@ -83,8 +89,11 @@ varying vec2 vD;
 const vec3 ACCENT = vec3(0.56, 0.83, 1.0), CORAL = vec3(1.0, 0.36, 0.30);
 const float OUTSIDE = 0.32; // brightness left outside the watershed
 ${RAMP}
+${RELIGHT}
+${WINDOW}
 void main() {
-  vec3 rel = texture2D(uRelief, vD).rgb;
+  vec3 nm = texture2D(uNormal, vD).rgb;
+  vec3 rel = texture2D(uRelief, vD).rgb * shadeAt(unpackNormal(nm.rg, ${SHADE_EXAG.toFixed(2)}), nm.b, uSun);
   vec4 m = texture2D(uMask, vD);
   vec4 la = texture2D(uLA, vD), lb = texture2D(uLB, vD);
   float inside = smoothstep(0.4, 0.6, m.b);
@@ -115,16 +124,18 @@ void main() {
   col = mix(col, ACCENT, rim * uOut * 0.6);
 
   vec2 edge = smoothstep(vec2(0.0), vec2(0.015), vD) * smoothstep(vec2(0.0), vec2(0.015), 1.0 - vD);
-  gl_FragColor = vec4(col, uShow * edge.x * edge.y);
+  gl_FragColor = vec4(col, uShow * edge.x * edge.y * windowAt(vD));
 }`;
 
 const dotFrag = /* glsl */ `
 varying vec3 vC;
 varying float vA;
+varying vec2 vUv;
+${WINDOW}
 void main() {
   float d = length(gl_PointCoord - 0.5);
   if (d > 0.5) discard;
-  gl_FragColor = vec4(vC, (1.0 - smoothstep(0.15, 0.5, d)) * vA);
+  gl_FragColor = vec4(vC, (1.0 - smoothstep(0.15, 0.5, d)) * vA * windowAt(vUv));
 }`;
 
 // Runoff particles: positions come from the physics in research-data.js every frame.
@@ -133,7 +144,10 @@ attribute float aKind, aAlpha, aSettled;
 uniform float uPixelRatio;
 varying vec3 vC;
 varying float vA;
+varying vec2 vUv;
+${MAP_UV}
 void main() {
+  vUv = mapUv(position.xy);
   bool water = aKind < 0.5;
   vC = water ? vec3(0.62, 0.84, 1.0) : aSettled > 0.0 ? vec3(0.72, 0.47, 0.28) : vec3(0.90, 0.58, 0.34);
   vA = aAlpha * (water ? 0.8 : 1.0);
@@ -147,7 +161,10 @@ const rainVert = /* glsl */ `
 attribute float aSeed, aElev;
 uniform float uTime, uRain, uLift, uPixelRatio;
 varying float vA;
+varying vec2 vUv;
+${MAP_UV}
 void main() {
+  vUv = mapUv(position.xy);
   float t = fract(uTime * 1.1 + aSeed * 17.0);
   vec3 p = vec3(position.xy, aElev * uLift + 0.28 * (1.0 - t));
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
@@ -157,11 +174,13 @@ void main() {
 }`;
 const rainFrag = /* glsl */ `
 varying float vA;
+varying vec2 vUv;
+${WINDOW}
 void main() {
   vec2 c = gl_PointCoord - 0.5;
   float a = (1.0 - smoothstep(0.02, 0.07, abs(c.x))) * (1.0 - smoothstep(0.2, 0.5, abs(c.y)));
   if (a < 0.01) discard;
-  gl_FragColor = vec4(0.70, 0.84, 1.0, a * vA);
+  gl_FragColor = vec4(0.70, 0.84, 1.0, a * vA * windowAt(vUv));
 }`;
 
 // Roads across high-risk ground, drawn on along their length.
@@ -170,7 +189,10 @@ attribute float aT, aElev, aSeed;
 uniform float uLift, uDraw, uAlpha, uPixelRatio;
 varying vec3 vC;
 varying float vA;
+varying vec2 vUv;
+${MAP_UV}
 void main() {
+  vUv = mapUv(position.xy);
   vec3 p = vec3(position.xy, aElev * uLift + 0.006);
   vC = vec3(1.0, 0.42, 0.34);
   vA = 0.9 * uAlpha * smoothstep(0.0, 0.04, uDraw * 1.15 - (aT * 0.8 + aSeed * 0.2));
@@ -185,7 +207,10 @@ attribute float aRisk, aSeed, aElev;
 uniform float uLift, uTime, uPlaces, uPixelRatio;
 varying vec3 vC;
 varying float vA, vCore, vRing;
+varying vec2 vUv;
+${MAP_UV}
 void main() {
+  vUv = mapUv(position.xy);
   vec3 p = vec3(position.xy, aElev * uLift + 0.01);
   float risky = step(2.5, aRisk);
   vC = mix(vec3(0.86, 0.91, 0.96), vec3(1.0, 0.42, 0.34), risky);
@@ -199,12 +224,14 @@ void main() {
 const placeFrag = /* glsl */ `
 varying vec3 vC;
 varying float vA, vCore, vRing;
+varying vec2 vUv;
+${WINDOW}
 void main() {
   float d = length(gl_PointCoord - 0.5);
   if (d > 0.5) discard;
   float core = 1.0 - smoothstep(vCore - 0.08, vCore, d);
   float ring = (1.0 - smoothstep(0.03, 0.07, abs(d - 0.38))) * vRing;
-  gl_FragColor = vec4(vC, max(core, ring * 0.8) * vA);
+  gl_FragColor = vec4(vC, max(core, ring * 0.8) * vA * windowAt(vUv));
 }`;
 
 function buildTerrain(ws, size) {
@@ -276,9 +303,10 @@ function buildPlaces(osm, ws, size) {
 
 export async function createResearch(scene, dpr, stationZ) {
   const loader = new THREE.TextureLoader();
-  const [ws, osm, context, relief, mask] = await Promise.all([
+  const [ws, osm, context, relief, normal, mask] = await Promise.all([
     loadWatershed(`${BASE}neugal-dem.bin`), loadJson(`${BASE}osm.json`), loadContext(BASE),
-    loadImage(loader, `${BASE}neugal-relief.jpg`), loadImage(loader, `${BASE}neugal-mask.png`)]);
+    loadImage(loader, `${BASE}neugal-albedo-v2.jpg`), loadImage(loader, `${BASE}neugal-normal-v2.jpg`),
+    loadImage(loader, `${BASE}neugal-mask.png`)]);
   const size = new THREE.Vector2(MAP_H * ws.Wd / ws.Hd, MAP_H);
   const K0 = (MAP_H * R_KM * 1000) / (ws.cellH * ws.Hd); // map units per Earth radius
   const zm = createZoomMap(context, [0, 0, size.x / K0, size.y / K0]);
@@ -286,9 +314,11 @@ export async function createResearch(scene, dpr, stationZ) {
   const runoff = createRunoff(ws, RUNOFF);
   const lt = layerTextures(ws);
 
-  const shared = { uLift: { value: 0 }, uTime: { value: 0 }, uPixelRatio: { value: dpr } };
+  const shared = { uLift: { value: 0 }, uTime: { value: 0 }, uPixelRatio: { value: dpr }, uSize: { value: size },
+    uWin: { value: new THREE.Vector4(-1, -1, 2, 2) }, uFeather: { value: 0.1 } };
   const tu = {
-    ...shared, uRelief: { value: relief }, uMask: { value: mask }, uDist: { value: lt.dist },
+    ...shared, uRelief: { value: relief }, uNormal: { value: normal }, uSun: { value: new THREE.Vector3() },
+    uMask: { value: mask }, uDist: { value: lt.dist },
     uLA: { value: lt.la }, uLB: { value: lt.lb }, uWa: { value: new THREE.Vector4() }, uWb: { value: new THREE.Vector4() },
     uShow: { value: 0 }, uOut: { value: 0 }, uRivers: { value: 0 }, uReveal: { value: 0 }, uFlow: { value: 0 },
     uWet: { value: 0 }, uDistKm: { value: lt.distKm },
@@ -334,9 +364,8 @@ export async function createResearch(scene, dpr, stationZ) {
   const group = new THREE.Group();
   group.add(clearer, zoom);
   scene.add(group);
-  const fit = makeFitter(group, size);
-  let fitted = false;
-  const prevPos = new THREE.Vector3();
+  // at the end of the zoom, zoom is the identity, so the group's map units are the valley's
+  const rig = makeRig(group, size, ws.elevAt, shared);
 
   // map labels: zoom anchors in Earth radii, terrain labels in data uv
   const S = STAGES;
@@ -346,6 +375,26 @@ export async function createResearch(scene, dpr, stationZ) {
   let top = -1; // highest cell inside the watershed
   for (let i = 0; i < ws.Wd * ws.Hd; i++) if (ws.down[i] >= 0 && (top < 0 || ws.elev[i] > ws.elev[top])) top = i;
   const peak = [((top % ws.Wd) + 0.5) / ws.Wd, (((top / ws.Wd) | 0) + 0.5) / ws.Hd];
+
+  // camera moves once the valley is reached: each stage's view comes early in the stage and is held or runs on
+  const FLAT = { c: [0.5, 0.5], z: 1, tilt: FACE_TILT, yaw: 0, e: 1 };
+  const WHOLE = { ...FLAT, tilt: TILT };
+  // a view of point c at zoom z, its focus box kept on the map
+  const near = (c, z, tilt, yaw) => ({ c: c.map((x) => Math.min(Math.max(x, 0.5 / z), 1 - 0.5 / z)), z, tilt, yaw, e: 1 });
+  const along = (t) => [outlet[0] + (peak[0] - outlet[0]) * t, outlet[1] + (peak[1] - outlet[1]) * t];
+  const risky = osm.places.filter((p) => p[2] >= HIGH_RISK);
+  const villages = risky.length ? frame(risky, 0.06, 3) : { c: [0.5, 0.5], z: 1 };
+  const views = makeViews([
+    [0, FLAT], [S[1], FLAT],
+    [S[1] + 0.03, near(outlet, 2.2, TILT, -0.1)],                                         // streams grow from the outlet
+    [S[1] + 0.08, { ...WHOLE, yaw: 0.02 }], [S[2] - 0.005, { ...WHOLE, yaw: 0.06 }],      // up to every ridge
+    [S[2] + 0.035, near(along(0.35), 1.3, -0.9, -0.2)], [S[3] - 0.005, near(along(0.8), 1.7, -0.95, 0.15)], // up to the peaks
+    [S[3] + 0.03, near(along(0.5), 1.5, -0.8, 0.1)], [S[4] - 0.005, near(along(0.5), 1.6, -0.8, 0.16)],     // the storm
+    [S[4] + 0.03, { ...WHOLE, tilt: -0.6, yaw: 0.06 }], [S[5] - 0.005, { ...WHOLE, tilt: -0.6, yaw: -0.04 }], // flatter to read
+    [S[5] + 0.03, { ...WHOLE, tilt: -0.66, yaw: -0.06 }], [S[6] - 0.005, { ...WHOLE, tilt: -0.66, yaw: 0.02 }],
+    [S[6] + 0.03, near(villages.c, villages.z, -0.75, -0.06)], [S[7] - 0.005, near(villages.c, villages.z, -0.75, 0.04)],
+    [S[7] + 0.035, { ...WHOLE, yaw: 0.04 }], [1, { ...WHOLE, yaw: 0.1 }],
+  ]);
   const { anchors } = context.ctx;
   const labels = [
     { name: "India", cls: "big", at: [anchors.india[0] * K0, anchors.india[1] * K0], a: (L) => ramp(L, 0.55, 0.85) * (1 - ramp(L, 1.45, 1.75)) },
@@ -358,7 +407,8 @@ export async function createResearch(scene, dpr, stationZ) {
 
   const pinStart = stationZ + P.researchView;
   const pinEnd = pinStart - P.researchPin;
-  let form = 0, q = 0, L = 0, view = { Z: 1, cx: 0, cy: 0, mag: 1 };
+  let form = 0, q = 0, L = 0, view = { Z: 1, cx: 0, cy: 0, mag: 1 }, cur = FLAT;
+  const sun = tu.uSun.value;
 
   return {
     pinStart, pinEnd, stats: osm.stats,
@@ -367,24 +417,18 @@ export async function createResearch(scene, dpr, stationZ) {
       const want = camZ <= stationZ + 6.6 && camZ >= pinEnd - 1.0;
       form = Math.max(0, Math.min(1, form + (want ? dt / 1.1 : -dt / 1.4)));
       group.visible = form > 0.001;
-      if (!group.visible) { fitted = false; return q; } // snap to a fresh fit on re-entry
+      if (!group.visible) { rig.reset(); return q; } // snap to a fresh fit on re-entry
 
       L = zoomLevel(q);
-      const tilt = ramp(q, S[1], S[1] + 0.06);
-      const lift = LIFT * (0.75 * tilt + 0.25 * ramp(q, S[2] - 0.01, S[2] + 0.03));
-      group.rotation.x = FACE_TILT + (TILT - FACE_TILT) * tilt;
+      cur = views(q);
+      const rise = ramp(q, S[1], S[1] + 0.06);
+      const lift = LIFT * (0.75 * rise + 0.25 * ramp(q, S[2] - 0.01, S[2] + 0.03));
       shared.uLift.value = lift;
 
-      // refit every frame (scroll speed zooms the camera) and ease toward the fit so it never jumps
+      // refit every frame (scroll speed zooms the camera)
       const clamped = Math.min(Math.max(camZ, pinEnd), pinStart);
-      const prevScale = group.scale.x;
-      prevPos.copy(group.position);
-      fit(camera, clamped - camZ, clamped - P.researchView, lift);
-      const k = fitted ? 1 - Math.exp(-dt * 5) : 1;
-      group.scale.setScalar(prevScale + (group.scale.x - prevScale) * k);
-      group.position.x = prevPos.x + (group.position.x - prevPos.x) * k;
-      group.position.y = prevPos.y + (group.position.y - prevPos.y) * k;
-      fitted = true;
+      rig.update(cur, camera, clamped - camZ, clamped - P.researchView, lift, dt);
+      sunAt(q, time, sun).lerp(ZOOM_SUN, 1 - rise).normalize();
 
       // zoom: each level fills the whole free screen area, measured in map units
       const box = fitBox();
@@ -421,7 +465,7 @@ export async function createResearch(scene, dpr, stationZ) {
       return q;
     },
     // Live magnification against the whole-planet view, for the first stage's counter.
-    mag() { return view.mag; },
+    live() { return view.mag; },
     // Screen overlay in CSS px: labels with opacity, north arrow and scale bar; null when hidden.
     overlay(camera) {
       if (!group.visible) return null;
@@ -429,18 +473,19 @@ export async function createResearch(scene, dpr, stationZ) {
       const out = labels.map((l) => {
         const [x, y] = l.uv ? uvAt(l.uv[0], l.uv[1]) : l.at;
         const z = l.uv ? ws.elevAt(l.uv[0], l.uv[1]) * shared.uLift.value + 0.015 : 0;
-        const p = screenOf(zoom, x, y, z, camera);
+        const p = l.uv && !rig.sees(l.uv[0], l.uv[1]) ? null : screenOf(zoom, x, y, z, camera);
         return { name: l.name, cls: l.cls, x: p ? p[0] : 0, y: p ? p[1] : 0, a: p ? form * Math.min(1, l.a(L, q)) : 0 };
       });
-      // north: the map's own +y on screen, foreshortened by the tilt
-      const o = screenOf(group, 0, 0, 0, camera), n = screenOf(group, 0, 0.1, 0, camera), e = screenOf(group, 0.1, 0, 0, camera);
+      // north: the map's own +y on screen at the centre of the view, foreshortened by the tilt
+      const d = 0.1 / cur.z, cx = (cur.c[0] - 0.5) * size.x, cy = (0.5 - cur.c[1]) * size.y, cz = ws.elevAt(cur.c[0], cur.c[1]) * shared.uLift.value;
+      const o = screenOf(group, cx, cy, cz, camera), n = screenOf(group, cx, cy + d, cz, camera), e = screenOf(group, cx + d, cy, cz, camera);
       if (!o || !n || !e) return { labels: out, north: null, scale: null };
       const nx = n[0] - o[0], ny = n[1] - o[1], ex = Math.hypot(e[0] - o[0], e[1] - o[1]);
       const box = fitBox(), W = innerWidth, H = innerHeight;
       const north = { x: box.x1 * W - 26, y: box.y0 * H + 26, rot: Math.atan2(nx, -ny),
         sy: Math.max(0.35, Math.min(1, Math.hypot(nx, ny) / ex)), a: form * ramp(L, 0.7, 1) };
       // scale bar: true at the map centre; hidden once the map tilts into perspective
-      const pxPerKm = ((ex / 0.1) * K0 * view.Z) / R_KM;
+      const pxPerKm = ((ex / d) * K0 * view.Z) / R_KM;
       let km = SCALE_KM[0];
       for (const c of SCALE_KM) if (c * pxPerKm <= SCALE_PX) km = c;
       const scale = { x: box.x0 * W + 6, y: box.y1 * H - 30, w: km * pxPerKm, text: `${km.toLocaleString("en-US")} km`,
