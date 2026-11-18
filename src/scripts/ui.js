@@ -29,6 +29,22 @@ export function splitInto(el, text, stagger = 18, base = 0) {
   return chars;
 }
 
+// Paragraph text rises in as one masked block instead of letter by letter, so it can be read as it lands.
+// Returns the block in an array, so show() and hide() treat it like a run of chars.
+export function blockInto(el, text, base = 0) {
+  el.textContent = "";
+  const mask = document.createElement("span");
+  mask.className = "blk";
+  const inner = document.createElement("span");
+  inner.textContent = text;
+  inner.style.transition = `transform 420ms ${EASE} ${base}ms, opacity 360ms ease ${base}ms`;
+  inner.style.transform = "translateY(110%)";
+  inner.style.opacity = "0";
+  mask.appendChild(inner);
+  el.appendChild(mask);
+  return [inner];
+}
+
 // Chars hidden again before their reveal frame (a fast jump past a station) must stay hidden.
 const hiddenSince = new WeakSet();
 export function show(chars) {
@@ -45,8 +61,8 @@ export function hide(chars, up = true) {
   });
 }
 
-// Chrome label that rolls the old text up and the new text in from below.
-export function swapper(el, stagger = 18) {
+// Chrome label that rolls the old text up and the new text in from below (block: as one paragraph).
+export function swapper(el, stagger = 18, block = false) {
   let current = "", layer = null, chars = [];
   el.classList.add("swap");
   return (text) => {
@@ -60,7 +76,7 @@ export function swapper(el, stagger = 18) {
     current = text;
     layer = document.createElement("span");
     layer.className = "swap-layer";
-    chars = splitInto(layer, text, stagger);
+    chars = block ? blockInto(layer, text) : splitInto(layer, text, stagger);
     el.appendChild(layer);
     show(chars);
   };
@@ -94,7 +110,7 @@ export function makeLabel(host, def) {
     chars = [];
     let base = 0;
     parts.forEach(({ n, text }) => {
-      const c = splitInto(n, text, n.className === "st-cap" ? 6 : 25, base);
+      const c = n.className === "st-cap" ? blockInto(n, text, base) : splitInto(n, text, 25, base);
       base += Math.min(c.length * 12, 260);
       chars.push(...c);
     });
@@ -158,7 +174,7 @@ export function makeTicks(host, count, onPick) {
 export function makeResearchHud(root, stages, terms, stageOf, subOf) {
   const q$ = (s) => root.querySelector(s);
   const idx = swapper(q$(".rs-idx")), name = swapper(q$(".rs-name"), 22);
-  const text = swapper(q$(".rs-text"), 4), unit = swapper(q$(".rs-unit"), 10);
+  const text = swapper(q$(".rs-text"), 4, true), unit = swapper(q$(".rs-unit"), 10, true);
   const num = q$(".rs-num"), legend = q$(".rs-legend"), eqLine = q$(".rs-eq");
   const north = q$(".rs-north"), scale = q$(".rs-scale"), scaleBar = q$(".rs-scale i"), scaleText = q$(".rs-scale span");
   const eq = [...root.querySelectorAll(".rs-eq [data-term]")];
@@ -166,7 +182,7 @@ export function makeResearchHud(root, stages, terms, stageOf, subOf) {
   stages.forEach(() => bar.appendChild(document.createElement("i")));
   const segs = [...bar.children];
   const head = [...root.querySelectorAll("[data-reveal-rs]")].map((el) => ({ el, text: el.dataset.revealRs, chars: [] }));
-  let shown = false, key = "", st = stages[0], stat = { cur: 0, target: 0, dp: 0 }, legendKey = "", legendTimer = 0;
+  let shown = false, key = "", stageAt = -1, st = stages[0], stat = { cur: 0, target: 0, dp: 0 }, legendKey = "", legendTimer = 0;
   const fmt = (v, dp) => v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
   // legend: a colour ramp ["ramp", low, high, optional ramp class], or swatches [class suffix, label]
   const swatch = (cls) => { const i = document.createElement("i"); i.className = cls; return i; };
@@ -214,7 +230,7 @@ export function makeResearchHud(root, stages, terms, stageOf, subOf) {
         head.forEach((h) => {
           if (visible) { h.chars = splitInto(h.el, h.text, 14); show(h.chars); } else hide(h.chars);
         });
-        if (!visible) key = "";
+        if (!visible) { key = ""; stageAt = -1; }
       }
       if (!visible) return;
       const s = stageOf(q), d = stages[s], sub = d.sub ? subOf(q) : -1;
@@ -226,7 +242,13 @@ export function makeResearchHud(root, stages, terms, stageOf, subOf) {
         name(d.name);
         text(sub >= 0 ? d.sub[sub] : d.text);
         unit(d.unit);
-        stat = { cur: stat.cur, target: d.stat === "live" ? live : d.stat, dp: d.dp };
+        if (s !== stageAt) {
+          // each stage's figure has its own unit: show it at once, not counting through values that mean nothing
+          stageAt = s;
+          const target = d.stat === "live" ? live : d.stat;
+          stat = { cur: target, target, dp: d.dp };
+          num.animate([{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }], { duration: 450, easing: EASE });
+        }
         // the equation shows only with the factors and the soil loss they multiply into
         const hot = d.eq ? (sub >= 0 ? terms[sub] : "A") : "";
         eq.forEach((e) => e.classList.toggle("hot", e.dataset.term === hot));

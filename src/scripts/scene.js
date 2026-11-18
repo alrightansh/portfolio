@@ -12,6 +12,8 @@ const lightDir = (angle, elev) => {
 };
 const OIL_SIZE = 256;
 const OIL_W = 16, OIL_D = 16;
+// share of the particle field and the dust that fades out while a map stop is pinned
+const CALM_PARTICLES = 0.6, CALM_DUST = 0.75;
 
 export function createWorld(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
@@ -240,7 +242,7 @@ export function createWorld(canvas) {
     get speedFactor() { return hover.speedF; },
     get presence() { return ptr.inside; },
 
-    // cam: { w, orbitPitch, orbitYaw, velFx }, intro: { eased, linear }
+    // cam: { w, orbitPitch, orbitYaw, velFx, calm }, intro: { eased, linear }; calm 0..1 while a map stop is pinned
     update(dt, cam, intro) {
       U.uTime.value += dt;
       const time = U.uTime.value;
@@ -289,6 +291,10 @@ export function createWorld(canvas) {
       pU.uTunnelCenterY.value = camera.position.y;
       particles2.material.uniforms.uParticleOpacity.value = P.particleOpacity * tp;
       particles2.visible = tp > 0.001;
+      // the ambient field steps back behind a map stop, so the map and its text are not read through moving dots
+      particles.material.uniforms.uParticleOpacity.value = P.particleOpacity * (1 - CALM_PARTICLES * cam.calm);
+      dustMat.uniforms.uDustOpacity.value = P.dustOpacity * (1 - CALM_DUST * cam.calm);
+      pU.uPWaveBoost.value = P.pWaveBoost * (1 - cam.calm);
       U.uSurfaceDarken.value = tp;
       if (tp > 0.05) U.uHoverActive.value = 0;
       pU.uCursorNDC.value.copy(ptr.ndc);

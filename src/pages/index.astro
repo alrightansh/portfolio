@@ -36,6 +36,15 @@
     .ch > span { display: inline-block; will-change: transform; }
     .swap { display: inline-grid; }
     .swap-layer { grid-area: 1 / 1; white-space: nowrap; }
+    /* paragraphs reveal as one masked block (ui.js blockInto) */
+    .blk { display: block; overflow: hidden; }
+    .blk > span { display: block; will-change: transform; }
+    /* readability over the moving scene: a dark halo on small text and a soft dark pool behind paragraphs */
+    #heroP, .st-label, .rs-head, .rs-step, .rs-stat, .rs-eq { text-shadow: 0 0 2px rgba(7, 9, 15, 0.9), 0 0 10px rgba(7, 9, 15, 0.7); }
+    #heroP::before, .st-cap::before, .st-post::before { content: ""; position: absolute; inset: -24px -48px; z-index: -1;
+      pointer-events: none; background: radial-gradient(closest-side, rgba(7, 9, 15, 0.78), rgba(7, 9, 15, 0)); }
+    .st-cap::before, .st-post::before { opacity: 0; transition: opacity 0.4s ease; }
+    .st-label.on .st-cap::before, .st-label.on .st-post::before { opacity: 1; }
 
     /* chrome */
     .top { position: fixed; inset: 0 0 auto 0; z-index: 30; display: flex; align-items: center;
@@ -63,19 +72,19 @@
     #heroB { bottom: 72px; right: var(--pad); }
     #heroP { position: fixed; z-index: 12; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0;
       width: min(560px, 86vw); text-align: center; font-size: 18px; line-height: 1.4; letter-spacing: 0.02em;
-      text-transform: uppercase; opacity: var(--hero-fade, 1); mix-blend-mode: difference; pointer-events: none; }
+      text-transform: uppercase; opacity: var(--hero-fade, 1); pointer-events: none; }
 
     /* station labels */
     #labels { position: fixed; z-index: 14; left: 50%; top: 52%; transform: translate(-50%, -50%);
       display: grid; pointer-events: none; }
     .st-label { grid-area: 1 / 1; display: flex; flex-direction: column; align-items: center; text-align: center;
-      mix-blend-mode: difference; color: #fff; }
+      color: #fff; }
     .st-pre { font-size: 18px; letter-spacing: 0.02em; text-transform: uppercase; color: #bababa; margin-bottom: 10px; }
     .st-title { font-size: 8vw; line-height: 1; letter-spacing: -0.01em; white-space: nowrap; }
     .st-title sup { font-size: 0.32em; color: #bababa; vertical-align: top; margin-left: 0.08em; }
-    .st-post { font-size: 2.56vw; line-height: 1.2; letter-spacing: -0.01em; color: #bababa; margin-top: 6px;
+    .st-post { position: relative; font-size: 2.56vw; line-height: 1.2; letter-spacing: -0.01em; color: #bababa; margin-top: 6px;
       max-width: 70vw; }
-    .st-cap { margin-top: 22px; max-width: 620px; font-size: 14px; line-height: 1.55; letter-spacing: 0.02em;
+    .st-cap { position: relative; margin-top: 22px; max-width: 620px; font-size: 14px; line-height: 1.55; letter-spacing: 0.02em;
       text-transform: uppercase; color: var(--fg); }
     .st-link { margin-top: 18px; font-size: 14px; letter-spacing: 0.02em; text-transform: uppercase;
       border-bottom: 1px solid currentColor; opacity: 0; transition: opacity 0.4s ease; }
@@ -84,12 +93,16 @@
     /* map stops: research (Neugal) and energy (North India) share the HUD styles */
     #research, #energy { position: fixed; inset: 0; z-index: 14; pointer-events: none; opacity: 0; transition: opacity 0.6s ease; }
     #research.on, #energy.on { opacity: 1; }
+    /* soft dark backing on the text side of the screen (left column, stat corner), clear of the map's area */
+    #research::before, #energy::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(90deg, rgba(7, 9, 15, 0.8) 0%, rgba(7, 9, 15, 0.55) 22%, rgba(7, 9, 15, 0) 42%),
+        radial-gradient(ellipse 46% 40% at 100% 100%, rgba(7, 9, 15, 0.7), rgba(7, 9, 15, 0)); }
     .rs-head { position: absolute; left: var(--pad); top: 104px; max-width: 42vw; }
     .rs-pre, .rs-idx, .rs-unit { font-size: 14px; letter-spacing: 0.02em; text-transform: uppercase; }
     .rs-pre { color: var(--accent); }
     .rs-title { margin-top: 12px; font-size: 5.4vw; line-height: 1; letter-spacing: -0.02em; }
     .rs-sub { margin-top: 10px; font-size: 1.5vw; color: var(--dim); }
-    .rs-eq { position: absolute; right: var(--pad); top: 110px; font-size: 24px; letter-spacing: 0.04em; color: rgba(210, 228, 242, 0.45);
+    .rs-eq { position: absolute; right: var(--pad); top: 170px; font-size: 24px; letter-spacing: 0.04em; color: rgba(210, 228, 242, 0.45);
       opacity: 0; transition: opacity 0.4s ease; }
     .rs-eq.on { opacity: 1; }
     .rs-eq span { display: inline-block; transition: color 0.35s ease, text-shadow 0.35s ease, transform 0.35s ease; }
@@ -105,7 +118,7 @@
     .rs-bar i.on { opacity: 1; width: 42px; background: var(--accent); }
     .rs-stat { position: absolute; right: var(--pad); bottom: 112px; text-align: right; }
     .rs-num { font-size: 6.2vw; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums;
-      text-shadow: 0 0 30px rgba(143, 211, 255, 0.35); }
+      text-shadow: 0 0 2px rgba(7, 9, 15, 0.9), 0 0 30px rgba(143, 211, 255, 0.35); }
     .rs-unit { margin-top: 10px; color: var(--dim); }
     .rs-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: flex-end; margin-top: 14px; font-size: 12px;
       text-transform: uppercase; letter-spacing: 0.02em; opacity: 0; transform: translateY(6px);
@@ -158,7 +171,8 @@
     .rs-scale { position: absolute; left: 0; top: 0; opacity: 0; font-size: 11px; letter-spacing: 0.04em; white-space: nowrap;
       text-shadow: 0 0 8px rgba(7, 9, 15, 0.9); }
     .rs-scale i { display: block; height: 5px; margin-top: 4px; border: 1px solid var(--fg); border-top: 0; }
-    .rs-attr { position: absolute; right: var(--pad); bottom: 84px; font-size: 10px; color: var(--dim); pointer-events: none; }
+    .rs-attr { position: absolute; right: var(--pad); bottom: 84px; max-width: 46vw; text-align: right; font-size: 10px;
+      color: var(--dim); pointer-events: none; }
     #research.on .rs-attr, #energy.on .rs-attr { pointer-events: auto; }
     .rs-attr a { color: inherit; }
 
@@ -211,7 +225,7 @@
       .st-title, #outroLabel { font-size: 12.5vw; line-height: 1.02; white-space: normal; text-align: center; }
       .st-title sup { font-size: 0.36em; }
       .st-post { font-size: 5.2vw; line-height: 1.25; max-width: none; }
-      .st-cap { margin-top: 0; font-size: 11.5px; line-height: 1.6; max-width: none; }
+      .st-cap { margin-top: 0; font-size: 12.5px; line-height: 1.6; max-width: none; }
       .st-title + .st-cap, .st-title + .st-post { margin-top: auto; }
       .st-link { margin-top: 14px; font-size: 13px; padding: 6px 0; }
       #outroLabel { top: 42%; width: calc(100vw - 2 * var(--pad)); }
@@ -219,6 +233,9 @@
       #ticks { height: 56px; bottom: env(safe-area-inset-bottom); }
       #loaderPct { bottom: var(--bottom); }
 
+      /* phones: the text sits in bands above and below the map, so the backing does too */
+      #research::before, #energy::before { background: linear-gradient(180deg, rgba(7, 9, 15, 0.82) 0%, rgba(7, 9, 15, 0.6) 26%,
+        rgba(7, 9, 15, 0) 38%, rgba(7, 9, 15, 0) 64%, rgba(7, 9, 15, 0.6) 76%, rgba(7, 9, 15, 0.86) 100%); }
       .rs-head { top: calc(var(--top) + 52px); max-width: none; right: var(--pad); }
       .rs-pre, .rs-idx, .rs-unit { font-size: 11px; }
       .rs-title { margin-top: 8px; font-size: min(9.5vw, 42px); }
@@ -233,10 +250,10 @@
       .rs-legend { width: 100%; justify-content: flex-start; gap: 10px; margin-top: 6px; font-size: 10px; }
       .rs-step { width: auto; right: var(--pad); bottom: calc(var(--bottom) + 46px); }
       .rs-name { margin-top: 6px; font-size: 22px; }
-      .rs-text { margin-top: 8px; font-size: 12.5px; line-height: 1.5; min-height: 6em; }
+      .rs-text { margin-top: 8px; font-size: 13px; line-height: 1.5; min-height: 6em; }
       .rs-bar { margin-top: 12px; }
       .rs-bar i { width: 18px; } .rs-bar i.on { width: 28px; }
-      .rs-attr { left: var(--pad); right: auto; bottom: calc(var(--bottom) + 22px); font-size: 9px; }
+      .rs-attr { left: var(--pad); right: auto; bottom: calc(var(--bottom) + 22px); max-width: none; text-align: left; font-size: 9px; }
       .rs-place { font-size: 10px; }
       .rs-place.big { font-size: 12px; }
       .rs-place.state { font-size: 9px; }

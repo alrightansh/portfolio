@@ -4,7 +4,7 @@ import { P } from "./config.js";
 import { createWorld } from "./scene.js";
 import { createStations, dizzyTexture, catTexture } from "./stations.js";
 import { createAmbience } from "./audio.js";
-import { splitInto, show, hide, swapper, makeLabel, makeTicks, magnet, makeResearchHud } from "./ui.js";
+import { splitInto, blockInto, show, hide, swapper, makeLabel, makeTicks, magnet, makeResearchHud } from "./ui.js";
 import { createResearch, RESEARCH_STAGES, EQ_TERMS, stageOf, subOf } from "./research.js";
 import { createEnergy, ENERGY_STAGES, energyStageOf } from "./energy.js";
 import { STATIONS, OUTRO } from "./content.js";
@@ -86,7 +86,7 @@ const huds = {
 // hero
 const heroA = $("heroA"), heroB = $("heroB"), heroP = $("heroP");
 const heroChars = [splitInto(heroA, heroA.dataset.text, 30), splitInto(heroB, heroB.dataset.text, 30, 120),
-  splitInto(heroP, heroP.dataset.text, 6, 300)];
+  blockInto(heroP, heroP.dataset.text, 300)];
 
 // outro
 const outroLabel = $("outroLabel"), outroBtn = $("outroBtn");
@@ -174,7 +174,8 @@ $("audioBtn").addEventListener("click", () => {
 // ---------------- frame loop ----------------
 const orbit = { pitch: 0, yaw: 0, pitchT: 0, yawT: 0, active: false };
 const vel = { last: 0, base: 0, fx: 0, kick: 0 };
-let introStart = -1, last = performance.now(), hintState = "";
+const CALM_RATE = 3; // per second, how fast the ambient field dims and returns around a map stop
+let introStart = -1, last = performance.now(), hintState = "", calm = 0;
 
 function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
@@ -198,13 +199,17 @@ function frame(now) {
   orbit.pitch += (orbit.pitchT - orbit.pitch) * rate;
   orbit.yaw += (orbit.yawT - orbit.yaw) * rate;
 
-  const { camZ, tunnel, time } = world.update(dt, { w, orbitPitch: orbit.pitch, orbitYaw: orbit.yaw, velFx: vel.fx }, intro);
+  const { camZ, tunnel, time } = world.update(dt, { w, orbitPitch: orbit.pitch, orbitYaw: orbit.yaw, velFx: vel.fx, calm }, intro);
   if (stations) stations.update(dt, camZ, time, world.pointerNDC, world.presence, world.speedFactor);
+  let pinned = false;
   for (const { stop, hud } of stops) {
     const q = stop.update(dt, camZ, time, world.camera);
-    hud.update(introDone && camZ <= stop.pinStart + 1.2 && camZ >= stop.pinEnd - 0.5, q, dt, stop.mag ? stop.mag() : 0);
+    const on = introDone && camZ <= stop.pinStart + 1.2 && camZ >= stop.pinEnd - 0.5;
+    if (on) pinned = true;
+    hud.update(on, q, dt, stop.mag ? stop.mag() : 0);
     hud.place(stop.overlay(world.camera));
   }
+  calm += ((pinned ? 1 : 0) - calm) * Math.min(1, dt * CALM_RATE); // read by the next frame's world.update
 
   // cat orbits the MakeMeDizzy wall
   const catK = Math.max(0, 1 - Math.abs(camZ - dizzyZ - 2.5) / 3.2);
