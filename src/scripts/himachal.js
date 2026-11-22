@@ -10,7 +10,7 @@ import { fitBox, ramp, win, geometry, loadJson, loadImage, loadDem, buildWalls, 
   makeScreenOf, makeViews, makeRig, RELIGHT, WINDOW, MAP_UV, sunDir, sunAt } from "./stop-kit.js";
 
 const BASE = "/himachal/";
-const V = "v1";
+const V = "v2";
 const SMALL = matchMedia("(max-width: 768px)").matches;
 const MAP_H = 1.9;          // north-south size in world units before fitting to the screen
 const EXAG = 2.6;           // relief drawn this many times taller than true scale in the state view
@@ -316,13 +316,14 @@ export async function createHimachal(scene, dpr, stationZ) {
   const loader = new THREE.TextureLoader();
   const meta = await loadJson(`${BASE}hp-meta-${V}.json`);
   const k2 = SMALL ? "-2k" : "";
-  const png = (n) => loadImage(loader, `${BASE}hp-${n}-${V}.png`);
+  const sm = SMALL ? "-sm" : ""; // phones: the data layers at half size
+  const png = (n) => loadImage(loader, `${BASE}hp-${n}${sm}-${V}.png`);
   const [dem, loss, albedo, normal, forest, snow1, snow2, snow3, snow4, trend, flood, floodMask, slide] = await Promise.all([
     loadDem(`${BASE}hp-dem-${V}.bin`, meta.dem.w, meta.dem.h, meta.dem.max, SMALL ? 2 : 1),
     loadLoss(`${BASE}hp-loss-${V}.bin`),
     loadImage(loader, `${BASE}hp-albedo${k2}-${V}.jpg`), loadImage(loader, `${BASE}hp-normal${k2}-${V}.jpg`),
     png("forest"), png("snow1"), png("snow2"), png("snow3"), png("snow4"), png("trend"),
-    loadImage(loader, `${BASE}hp-flood-${V}.jpg`), png("floodmask"), png("slide")]);
+    loadImage(loader, `${BASE}hp-flood${sm}-${V}.jpg`), png("floodmask"), png("slide")]);
   for (const t of [forest, trend]) t.anisotropy = 1; // read texel by texel for the borders
   const size = new THREE.Vector2((MAP_H * meta.km[0]) / meta.km[1], MAP_H);
   const kmPerUnit = meta.km[1] / MAP_H;
