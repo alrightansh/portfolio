@@ -7,6 +7,8 @@ export const STATIONS = [
     caption: "Geospatial data scientist on the first Esri Platinum team. I have delivered multiple iterations of bulk utility migrations, and I keep enhancing Esri Utility Network systems and how they are deployed across enterprise asset management (EAM) platforms.",
     href: "/work/utility-network/", linkText: "Read the case study →",
   },
+  // LiDAR stop: rendered by lidar.js with its own HUD instead of a label.
+  { id: "utilities-in-3d", lidar: true, title: "Utilities in 3D" },
   {
     id: "toolkit", glyph: "</>", title: "Toolkit", sup: "(skills)",
     caption: "Automation end to end: Python, FME and CI/CD pipelines that turn months of migration work into repeatable runs. Electric and gas UPDM models, asset packages and rule bases. Team management and product development, from first prototype to production.",

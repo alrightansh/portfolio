@@ -9,6 +9,7 @@ import { initTransitions } from "./transition.js";
 import { createResearch, RESEARCH_STAGES, EQ_TERMS, stageOf, subOf } from "./research.js";
 import { createEnergy, ENERGY_STAGES, energyStageOf } from "./energy.js";
 import { createHimachal, HIMACHAL_STAGES, himachalStageOf, himachalSubOf } from "./himachal.js";
+import { createLidar, LIDAR_STAGES, lidarStageOf, lidarSubOf } from "./lidar.js";
 import { STATIONS, OUTRO } from "./content.js";
 
 const FONT = "'Overused Grotesk', system-ui, sans-serif";
@@ -24,7 +25,7 @@ const audio = createAmbience();
 // ---------------- stations ----------------
 const loader = new THREE.TextureLoader();
 const tex = (url) => loader.load(url);
-const isMapStop = (s) => Boolean(s.research || s.energy || s.himachal); // pinned stops with their own HUD
+const isMapStop = (s) => Boolean(s.lidar || s.research || s.energy || s.himachal); // pinned stops with their own HUD
 const defs = STATIONS.map((s) => isMapStop(s) ? { kind: "none" } : s.glass
   ? { kind: "glass", texture: s.glass === "dizzy" ? dizzyTexture() : tex(s.glass) }
   : { kind: "glyph", glyph: s.glyph, height: s.glyphHeight });
@@ -45,6 +46,7 @@ const stationZ = STATIONS.map((_, i) => P.statFirstZ - i * P.statSpacing);
 
 // Scroll px -> flight distance. The camera slows to a crawl while a map stop is pinned, so its
 // stages get room to play out. Each pin covers flight distance da..db and scroll sa..sb.
+const LI_Z = stationZ[STATIONS.findIndex((s) => s.lidar)];
 const RS_Z = stationZ[STATIONS.findIndex((s) => s.research)];
 const EN_Z = stationZ[STATIONS.findIndex((s) => s.energy)];
 const HP_Z = stationZ[STATIONS.findIndex((s) => s.himachal)];
@@ -95,6 +97,7 @@ function flyToHash() {
 addEventListener("hashchange", () => { if (introDone) flyToHash(); });
 const ticks = makeTicks($("ticks"), STATIONS.length, flyTo, STATIONS.map((s) => `Fly to ${s.title}`));
 const huds = {
+  lidar: makeResearchHud($("lidar"), LIDAR_STAGES, [], lidarStageOf, lidarSubOf),
   research: makeResearchHud($("research"), RESEARCH_STAGES, EQ_TERMS, stageOf, subOf),
   energy: makeResearchHud($("energy"), ENERGY_STAGES, [], energyStageOf, () => -1),
   himachal: makeResearchHud($("himachal"), HIMACHAL_STAGES, [], himachalStageOf, himachalSubOf),
@@ -258,7 +261,7 @@ function frame(now) {
   }
   ticks.update(fIndex, introDone && tunnel < 0.02, now);
 
-  const hint = camZ > 2.5 ? START_HINT : camZ > stationZ[6] - 3 ? "Keep going" : "Almost there";
+  const hint = camZ > 2.5 ? START_HINT : camZ > stationZ[7] - 3 ? "Keep going" : "Almost there";
   if (introDone && hint !== hintState) { hintState = hint; leftHint(hint); }
   updateOutro(camZ, now, dt);
 
@@ -291,7 +294,8 @@ async function boot() {
       try { stops.push({ stop: await create(world.scene, world.dpr, z), hud: huds[key] }); }
       catch (err) { console.error(`${key} stop unavailable`, err); dropPin(key); }
     };
-    await load("research", createResearch, RS_Z);
+    // the first two map stops, ready before the page is up
+    await Promise.all([load("lidar", createLidar, LI_Z), load("research", createResearch, RS_Z)]);
     ready = true;
     // later in the flight, so it loads after the page is up
     await load("energy", createEnergy, EN_Z);

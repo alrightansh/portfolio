@@ -96,11 +96,11 @@ const ld = [
       border-bottom: 1px solid currentColor; opacity: 0; transition: opacity 0.4s ease; }
     .st-label.on .st-link { opacity: 1; pointer-events: auto; }
 
-    /* map stops: research (Neugal), energy (North India) and himachal share the HUD styles */
-    #research, #energy, #himachal { position: fixed; inset: 0; z-index: 14; pointer-events: none; opacity: 0; transition: opacity 0.6s ease; }
-    #research.on, #energy.on, #himachal.on { opacity: 1; }
+    /* map stops: lidar (Wierden), research (Neugal), energy (North India) and himachal share the HUD styles */
+    #lidar, #research, #energy, #himachal { position: fixed; inset: 0; z-index: 14; pointer-events: none; opacity: 0; transition: opacity 0.6s ease; }
+    #lidar.on, #research.on, #energy.on, #himachal.on { opacity: 1; }
     /* soft dark backing on the text side of the screen (left column, stat corner), clear of the map's area */
-    #research::before, #energy::before, #himachal::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+    #lidar::before, #research::before, #energy::before, #himachal::before { content: ""; position: absolute; inset: 0; pointer-events: none;
       background: linear-gradient(90deg, rgba(7, 9, 15, 0.8) 0%, rgba(7, 9, 15, 0.55) 22%, rgba(7, 9, 15, 0) 42%),
         radial-gradient(ellipse 46% 40% at 100% 100%, rgba(7, 9, 15, 0.7), rgba(7, 9, 15, 0)); }
     .rs-head { position: absolute; left: var(--pad); top: 104px; max-width: 42vw; }
@@ -168,6 +168,13 @@ const ld = [
     .rs-legend .lg-column { width: 5px; height: 14px; border-radius: 1px; background: linear-gradient(#ffb86b, #d95233); }
     .rs-legend .lg-bar-snow { background: linear-gradient(90deg, rgba(168, 204, 250, 0.2), #a8ccfa, #f5faff); }
     .rs-legend .lg-bar-slide { background: linear-gradient(90deg, #296b54, #8cbd61, #fad66b, #fa854d, #e63338); }
+    .rs-legend .lg-bar-lidar { background: linear-gradient(90deg, #172e66, #2980eb 10%, #80dbff 50%, #fff5db); }
+    .lg-liground { background: #5c6b85; } .lg-libuild { background: #f5dbb3; } .lg-litree { background: #5ccc80; }
+    .lg-liwater { background: #4d9eff; } .lg-litower { background: #f2f7ff; } .lg-linear { background: #ff5445; } .lg-limid { background: #ffb340; }
+    .rs-legend .lg-li380, .rs-legend .lg-li110, .rs-legend .lg-lifoul, .rs-legend .lg-licomb, .rs-legend .lg-listorm,
+    .rs-legend .lg-liinflow, .rs-legend .lg-lipress, .rs-legend .lg-lioverflow { width: 18px; height: 2px; border-radius: 1px; }
+    .lg-li380 { background: #ffe699; } .lg-li110 { background: #a6e0ff; } .lg-lifoul { background: #fa9e4d; } .lg-licomb { background: #db75e0; }
+    .lg-listorm { background: #52c4ff; } .lg-liinflow { background: #ffd959; } .lg-lipress { background: #ff5c47; } .lg-lioverflow { background: #8cffd9; }
     .rs-place { position: absolute; left: 0; top: 0; padding-left: 10px; margin-top: -8px; font-size: 12px;
       letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg); opacity: 0; white-space: nowrap;
       text-shadow: 0 0 10px rgba(7, 9, 15, 0.95), 0 0 3px rgba(7, 9, 15, 0.9); }
@@ -175,9 +182,11 @@ const ld = [
       border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px rgba(7, 9, 15, 0.55); }
     .rs-place.big { padding: 0; margin: 0; font-size: 15px; letter-spacing: 0.18em; }
     .rs-place.big::before { display: none; }
+    .rs-place.flip { padding: 0 10px 0 0; } .rs-place.flip::before { left: auto; right: -3px; } /* opens to the left of its dot */
     .rs-place.state { font-size: 11px; letter-spacing: 0.14em; }
     .rs-place.solar::before { background: #ffb341; } .rs-place.wind::before { background: #45d3e8; }
     .rs-place.hybrid::before { background: #c08cff; } .rs-place.plant::before { background: #ffd27a; border-radius: 1px; }
+    .rs-place.warn::before { background: #ff5445; } .rs-place.pump::before { background: #ff5c47; border-radius: 1px; }
     .rs-north { position: absolute; left: 0; top: 0; width: 20px; height: 40px; margin: -20px 0 0 -10px; opacity: 0; }
     .rs-north svg { display: block; width: 20px; height: 40px; overflow: visible; }
     .rs-north text { fill: var(--fg); font-size: 10px; }
@@ -188,7 +197,7 @@ const ld = [
     .rs-scale i { display: block; height: 5px; margin-top: 4px; border: 1px solid var(--fg); border-top: 0; }
     .rs-attr { position: absolute; right: var(--pad); bottom: 84px; max-width: 46vw; text-align: right; font-size: 10px;
       color: var(--dim); pointer-events: none; }
-    #research.on .rs-attr, #energy.on .rs-attr, #himachal.on .rs-attr { pointer-events: auto; }
+    #lidar.on .rs-attr, #research.on .rs-attr, #energy.on .rs-attr, #himachal.on .rs-attr { pointer-events: auto; }
     .rs-attr a { color: inherit; }
     @media (min-width: 769px) { #himachal .rs-stat { bottom: 128px; } } /* its credits wrap to three lines below about 1,100 px */
 
@@ -252,7 +261,7 @@ const ld = [
       #loaderPct { bottom: var(--bottom); }
 
       /* phones: the text sits in bands above and below the map, so the backing does too */
-      #research::before, #energy::before, #himachal::before { background: linear-gradient(180deg, rgba(7, 9, 15, 0.82) 0%, rgba(7, 9, 15, 0.6) 26%,
+      #lidar::before, #research::before, #energy::before, #himachal::before { background: linear-gradient(180deg, rgba(7, 9, 15, 0.82) 0%, rgba(7, 9, 15, 0.6) 26%,
         rgba(7, 9, 15, 0) 38%, rgba(7, 9, 15, 0) 64%, rgba(7, 9, 15, 0.6) 76%, rgba(7, 9, 15, 0.86) 100%); }
       .rs-head { top: calc(var(--top) + 52px); max-width: none; right: var(--pad); }
       .rs-pre, .rs-idx, .rs-unit { font-size: 11px; }
@@ -310,6 +319,29 @@ const ld = [
   <div class="hero" id="heroB" data-text="Choudhary" aria-hidden="true"></div>
 
   <div id="labels"></div>
+  <section id="lidar" aria-label="Research: power lines and sewers of a block of Wierden in 3D, from airborne LiDAR and open data">
+    <div class="rs-head">
+      <div class="rs-pre" data-reveal-rs="Research work"></div>
+      <div class="rs-title" data-reveal-rs="Utilities in 3D"></div>
+      <div class="rs-sub" data-reveal-rs="Power lines and sewers from airborne LiDAR and open data"></div>
+    </div>
+    <div class="rs-eq" aria-hidden="true"></div>
+    <div class="rs-step">
+      <div class="rs-idx"></div>
+      <div class="rs-name"></div>
+      <div class="rs-text"></div>
+      <div class="rs-bar"></div>
+    </div>
+    <div class="rs-stat">
+      <div class="rs-num">0</div>
+      <div class="rs-unit"></div>
+      <div class="rs-legend"></div>
+    </div>
+    <div class="rs-places" aria-hidden="true"></div>
+    <div class="rs-north" aria-hidden="true"><svg viewBox="0 0 20 40"><text x="10" y="9" text-anchor="middle">N</text><path class="nf" d="M10 13 L15 38 L10 33 Z" /><path class="no" d="M10 13 L5 38 L10 33 Z" /></svg></div>
+    <div class="rs-scale" aria-hidden="true"><span></span><i></i></div>
+    <div class="rs-attr">Point cloud: AHN6, Het Waterschapshuis · Sewers and pumping stations: GWSW via PDOK (CC0) · Power lines © <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> contributors</div>
+  </section>
   <section id="research" aria-label="Research: soil erosion risk in the Neugal watershed">
     <div class="rs-head">
       <div class="rs-pre" data-reveal-rs="Research work"></div>

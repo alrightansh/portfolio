@@ -239,8 +239,10 @@ export function makeResearchHud(root, stages, terms, stageOf, subOf) {
         const p = list[i];
         fade(el, p ? p.a : 0);
         if (!p || p.a <= 0.004) return;
-        if (el.textContent !== p.name) { el.textContent = p.name; el.className = `rs-place ${p.cls}`; }
-        el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px)${el.classList.contains("big") ? " translate(-50%, -50%)" : ""}`;
+        const cls = `rs-place ${p.cls}`;
+        if (el.textContent !== p.name || el.className !== cls) { el.textContent = p.name; el.className = cls; }
+        const shift = el.classList.contains("big") ? " translate(-50%, -50%)" : el.classList.contains("flip") ? " translateX(-100%)" : "";
+        el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px)${shift}`;
       });
       const n = o && shown ? o.north : null, s = o && shown ? o.scale : null;
       fade(north, n ? n.a : 0);
