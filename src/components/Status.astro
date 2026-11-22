@@ -1,0 +1,8 @@
+---
+// A status label for unfinished work (Implemented, Prototype, In development, Planned concept),
+// or a plain category tag when `label` is given instead of `kind`.
+import { STATUS } from "../data/site.js";
+const { kind, label } = Astro.props;
+const s = kind ? STATUS[kind] : { label, cls: "st-cat" };
+---
+<span class:list={["status", s.cls]}>{s.label}</span>

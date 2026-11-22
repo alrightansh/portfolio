@@ -1,0 +1,23 @@
+---
+// The flight's hero, for a reading page: one word top left, one bottom right, a caption in the middle.
+// The h1 reads as one phrase; the two words are placed apart and drift away from each other as the page scrolls.
+import Contours from "./Contours.astro";
+import Status from "./Status.astro";
+interface Props { a: string; b: string; pre?: string; lead: string; seed?: number; status?: string; hint?: string }
+const { a, b, pre, lead, seed = 7, status, hint = "Scroll to read" } = Astro.props;
+---
+<section class="hero" aria-labelledby="page-title">
+  <Contours seed={seed} />
+  <div class="hero-inner">
+    <h1 class="hero-title" id="page-title">
+      <span class="hero-a" data-split data-stagger="30">{a}</span>
+      <span class="hero-b" data-split data-stagger="30" data-delay="120">{b}</span>
+    </h1>
+    <div class="hero-mid">
+      {pre && <p class="hero-pre" data-split data-stagger="14" data-delay="200">{pre}</p>}
+      <p class="hero-p" data-block data-delay="300">{lead}</p>
+      {status && <div data-block data-delay="420"><Status kind={status} /></div>}
+    </div>
+    <p class="hero-hint caps" data-split data-stagger="18" data-delay="500">{hint}</p>
+  </div>
+</section>

@@ -1,0 +1,37 @@
+---
+// A pipeline or architecture as a rail of steps with a stage HUD underneath (scripts/page-flow.js).
+// mode "scroll": on desktop the stage pins and each step plays with scroll, like a map stop in the flight.
+// mode "inspect": the rail draws in, a pulse runs through once, and hovering or focusing a step shows it.
+// Every description is in the markup: read as a list on phones and by screen readers.
+interface Step { name: string; text: string }
+interface Props { id: string; steps: Step[]; mode?: "scroll" | "inspect"; label: string; caption?: string; returns?: boolean; kicker?: string }
+const { id, steps, mode = "inspect", label, caption, returns = false, kicker } = Astro.props;
+const pad = (v: number) => String(v).padStart(2, "0");
+---
+<figure class:list={["flow", `flow--${mode}`, { "flow--long": steps.length > 6 }]} id={id} data-flow={mode}
+  data-return={returns ? "" : undefined} aria-label={label}>
+  <div class="flow-pin">
+    <div class="flow-stage">
+      {kicker && <p class="flow-kicker idx">{kicker}</p>}
+      <ol class="flow-rail">
+        {steps.map((s, i) => (
+          <li class="flow-step">
+            <button type="button" class="flow-node" aria-describedby={`${id}-d${i}`}>
+              <span class="flow-dot" aria-hidden="true"></span>
+              <span class="flow-label"><span class="flow-idx" aria-hidden="true">{pad(i + 1)}</span> <span class="flow-name">{s.name}</span></span>
+            </button>
+            <p class="flow-desc" id={`${id}-d${i}`}>{s.text}</p>
+            {i < steps.length - 1 && <span class="flow-link" aria-hidden="true"><i></i></span>}
+          </li>
+        ))}
+      </ol>
+      <div class="flow-panel" aria-hidden="true">
+        <div class="fp-idx"></div>
+        <div class="fp-name"></div>
+        <div class="fp-text"></div>
+        <div class="fp-bar">{steps.map(() => <i></i>)}</div>
+      </div>
+    </div>
+  </div>
+  {caption && <figcaption class="flow-cap caps-dim">{caption}</figcaption>}
+</figure>

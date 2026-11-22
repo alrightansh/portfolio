@@ -1,0 +1,62 @@
+---
+import Page from "../../layouts/Page.astro";
+import Hero from "../../components/Hero.astro";
+import ProjectCase from "../../components/ProjectCase.astro";
+import Figure from "../../components/Figure.astro";
+import { PROJECTS, ALSO, DATASETS } from "../../data/projects.js";
+import { PERSON } from "../../data/site.js";
+
+const title = "Geospatial Data Science and Earth Observation · Anshuman Choudhary";
+const description = "Remote sensing and spatial modelling by Anshuman Choudhary: RUSLE soil erosion in the Neugal watershed, solar and wind hotspots across North India, and forests, snow, floods and landslides in Himachal Pradesh.";
+const jsonLd = {
+  "@context": "https://schema.org", "@type": "CollectionPage", name: "Geospatial data science and Earth observation", description,
+  author: { "@type": "Person", name: PERSON.name, url: "https://alrightansh.com/" },
+  hasPart: PROJECTS.map((p) => ({ "@type": "CreativeWork", name: `${p.title}: ${p.sub}`, url: `https://alrightansh.com/work/earth-observation/#${p.id}` })),
+};
+---
+<Page title={title} description={description} path="/work/earth-observation/" crumb={{ href: "/work/", label: "Work" }} jsonLd={jsonLd}>
+  <Hero a="Reading" b="the planet" seed={5} pre="Geospatial data science · Earth observation"
+    lead="Machine learning on satellite imagery, terrain analysis and spatial models, turned into decisions about soil, energy and hazards." />
+
+  <section class="section" aria-label="Approach">
+    <div class="wrap split2">
+      <p class="lead" data-block>I build models on satellite imagery for land use and land cover, change detection and terrain analysis, then
+        turn them into decisions: hazard and risk mapping, urban risk management and master plan formulation.</p>
+      <div>
+        <p class="body" data-block>Three projects follow, each also a stop in the 3D flight on the home page, where the same data plays out
+          on real terrain. Background: advanced degrees in Geography and Remote Sensing, and ISRO–IIRS advanced certifications.</p>
+        <ul class="chips" data-items="fade" aria-label="Datasets">
+          {DATASETS.map(([name, used]) => <li title={`Used in: ${used}`}>{name}</li>)}
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  {PROJECTS.map((p, i) => <ProjectCase p={p} n={i + 1} of={PROJECTS.length} />)}
+
+  <section class="section" aria-labelledby="also-title">
+    <div class="wrap">
+      <p class="kicker" data-split data-stagger="14">Also built</p>
+      <h2 class="h2" id="also-title" data-split data-delay="60">Old maps, new mountains</h2>
+      {ALSO.map((a) => (
+        <div class="split2 block feature">
+          <Figure src={a.img} widths={[800, 1280]} w={1280} h={a.h} sizes="(max-width: 768px) 100vw, 45vw" alt={a.alt} />
+          <div>
+            <h3 class="h3" data-split data-stagger="22">{a.title}</h3>
+            <p class="body" data-block>{a.text}</p>
+            <div class="case-links" data-block data-delay="80">
+              <a class="link" href={a.href}>{a.link} <span class="arr" aria-hidden="true">→</span></a>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <nav class="next wrap" aria-label="Back to the overview">
+    <a href="/work/">
+      <span class="idx" data-split data-stagger="14">Next</span>
+      <span class="next-title" data-split>Experience and skills <span class="arr">→</span></span>
+    </a>
+  </nav>
+</Page>

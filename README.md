@@ -1,7 +1,9 @@
 # portfolio
 
 Source for [alrightansh.com](https://alrightansh.com): a scroll-driven 3D flight through a particle terrain,
-built with Astro and three.js.
+built with Astro and three.js, plus reading pages under `/work/` (overview, the utility network case study, AI meets
+GIS and Earth observation) that share the flight's type and motion. See [PROJECT.md](PROJECT.md) for the working
+notes: structure, CSP rules, the motion inventory and the content rules.
 
 ## Develop
 
@@ -34,6 +36,11 @@ npx astro dev
   snow cover trends and forest loss, exported by `pipeline/export_web.py` in the separate himachal-remote-sensing project.
   Sources: Copernicus Sentinel-1 and Sentinel-2, Copernicus GLO-30, Hansen Global Forest Change, MODIS (NSIDC), RGI 7.0,
   JRC Global Surface Water, ESA WorldCover, CHIRPS and OpenStreetMap (ODbL). Same versioning rule.
+
+- `src/pages/work/`, `src/layouts/Page.astro`, `src/components/`: the reading pages; their copy lives in `src/data/`,
+  their scripts in `src/scripts/page*.js` (built on `ui.js`), their styles in `src/styles/`.
+- `public/work/`: WebP images for the reading pages, rebuilt with `python -I tools/work/build_images.py` (needs Pillow;
+  reads the north-india-renewables map sheets from a sibling checkout). Same versioning rule as the map stops.
 
 ## Deploy
 

@@ -1,0 +1,16 @@
+---
+// A numbered chapter with the map stops' heading: "01 / 07", title, subtitle. Registers itself with the chapter ticks.
+interface Props { id: string; n: number; of: number; title: string; sub?: string; label?: string }
+const { id, n, of, title, sub, label } = Astro.props;
+const pad = (v: number) => String(v).padStart(2, "0");
+---
+<section class="chapter" id={id} data-chapter={label ?? title} aria-labelledby={`${id}-title`}>
+  <div class="wrap">
+    <header class="chapter-head">
+      <p class="idx" data-split data-stagger="14">{pad(n)} / {pad(of)}</p>
+      <h2 class="h2" id={`${id}-title`} data-split data-delay="60">{title}</h2>
+      {sub && <p class="sub" data-split data-stagger="12" data-delay="220">{sub}</p>}
+    </header>
+    <slot />
+  </div>
+</section>

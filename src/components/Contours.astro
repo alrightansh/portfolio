@@ -1,0 +1,9 @@
+---
+// Hero background: a build-time contour field (scripts/contours.js) that draws itself once, level by level.
+import { contourField } from "../scripts/contours.js";
+const { seed = 7 } = Astro.props;
+const f = contourField({ seed });
+---
+<svg class="contours" viewBox={`0 0 ${f.w} ${f.h}`} preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+  {f.paths.map((p) => <path class:list={{ major: p.major }} d={p.d} pathLength="1" data-level={p.level} />)}
+</svg>

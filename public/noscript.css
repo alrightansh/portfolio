@@ -1,0 +1,3 @@
+/* Without JavaScript the reading pages show everything at once; the menu needs the script, the footer index does not. */
+[data-split], [data-block], [data-items] > *, [data-img] { opacity: 1 !important; animation: none !important; }
+#menuBtn, #ticks { display: none !important; }

@@ -4,7 +4,8 @@ import { P } from "./config.js";
 import { createWorld } from "./scene.js";
 import { createStations, dizzyTexture, catTexture } from "./stations.js";
 import { createAmbience } from "./audio.js";
-import { splitInto, blockInto, show, hide, swapper, makeLabel, makeTicks, magnet, makeResearchHud } from "./ui.js";
+import { splitInto, blockInto, show, hide, swapper, makeLabel, makeTicks, magnet, makeResearchHud, REDUCED } from "./ui.js";
+import { initTransitions } from "./transition.js";
 import { createResearch, RESEARCH_STAGES, EQ_TERMS, stageOf, subOf } from "./research.js";
 import { createEnergy, ENERGY_STAGES, energyStageOf } from "./energy.js";
 import { createHimachal, HIMACHAL_STAGES, himachalStageOf, himachalSubOf } from "./himachal.js";
@@ -83,9 +84,16 @@ let MAX_SCROLL = scrollFor(-(P.outroButtonZ - 12));
 
 const leftHint = swapper($("hint"));
 const audioLabel = swapper($("audioLabel"));
-const ticks = makeTicks($("ticks"), STATIONS.length, (i) => {
+// Fly to a station: the ticks, and deep links such as /#neugal from the work pages.
+function flyTo(i) {
   target = Math.max(0, Math.min(MAX_SCROLL, scrollFor(CAM0 - (stationZ[i] + 3.3))));
-});
+}
+function flyToHash() {
+  const i = STATIONS.findIndex((s) => s.id && s.id === decodeURIComponent(location.hash.slice(1)));
+  if (i >= 0) flyTo(i);
+}
+addEventListener("hashchange", () => { if (introDone) flyToHash(); });
+const ticks = makeTicks($("ticks"), STATIONS.length, flyTo, STATIONS.map((s) => `Fly to ${s.title}`));
 const huds = {
   research: makeResearchHud($("research"), RESEARCH_STAGES, EQ_TERMS, stageOf, subOf),
   energy: makeResearchHud($("energy"), ENERGY_STAGES, [], energyStageOf, () => -1),
@@ -98,7 +106,7 @@ const heroChars = [splitInto(heroA, heroA.dataset.text, 30), splitInto(heroB, he
   blockInto(heroP, heroP.dataset.text, 300)];
 
 // outro
-const outroLabel = $("outroLabel"), outroBtn = $("outroBtn");
+const outroLabel = $("outroLabel"), outroBtn = $("outroBtn"), outroWork = $("outroWork");
 const btnMagnet = magnet(outroBtn, P.magnetRadius, P.magnetStrength);
 const outro = { phase: 0, enteredAt: 0, ready: false, chars: [], prevZ: CAM0 };
 function outroText(phase) {
@@ -127,6 +135,8 @@ function updateOutro(camZ, now, dt) {
   const vis = outro.phase === 2 && outro.ready;
   outroBtn.style.opacity = vis ? "1" : "0";
   outroBtn.style.pointerEvents = vis ? "auto" : "none";
+  outroWork.style.opacity = vis ? "1" : "0";
+  outroWork.style.pointerEvents = vis ? "auto" : "none";
   btnMagnet(dt, pointer, vis);
 }
 
@@ -202,7 +212,8 @@ function frame(now) {
   let x = Math.abs(travelled - vel.last);
   vel.last = travelled;
   vel.base += (x - vel.base) * 0.04;
-  const c = 1 - Math.exp(-(0.18 * Math.max(0, x - vel.base)));
+  // reduced motion: no camera roll or zoom kick on fast scrolls
+  const c = REDUCED ? 0 : 1 - Math.exp(-(0.18 * Math.max(0, x - vel.base)));
   vel.fx += (c - vel.fx) * (c > vel.fx ? 0.09 : 0.04);
   const rate = orbit.active ? 0.05 : 0.02;
   orbit.pitch += (orbit.pitchT - orbit.pitch) * rate;
@@ -305,6 +316,8 @@ async function boot() {
   leftHint(START_HINT); hintState = START_HINT;
   audioLabel("Audio off");
   document.querySelectorAll("[data-reveal]").forEach((el) => show(splitInto(el, el.dataset.reveal)));
-  setTimeout(() => { introDone = true; document.body.classList.add("intro-done"); }, INTRO_MS * 0.6);
+  setTimeout(() => { introDone = true; document.body.classList.add("intro-done"); flyToHash(); }, INTRO_MS * 0.6);
 }
+// links to the work pages leave with the loader's accent bar; the loader itself covers the arrival
+initTransitions({ arrive: false });
 boot();

@@ -1,6 +1,16 @@
 // DOM motion: per-character mask reveals, swapping chrome text, station labels, ticks, magnet button.
+// Shared by the flight and the reading pages (page.js), so both move the same way.
 
-const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+export const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+// Reduced motion: the same reveals become short fades in place, with no travel.
+export const REDUCED = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function prime(inner, ms, opacityMs, delay) {
+  inner.style.transition = REDUCED ? `opacity 200ms ease ${Math.min(delay, 200)}ms`
+    : `transform ${ms}ms ${EASE} ${delay}ms, opacity ${opacityMs}ms ease ${delay}ms`;
+  inner.style.transform = REDUCED ? "none" : "translateY(110%)";
+  inner.style.opacity = "0";
+}
 
 // Split text into masked characters (words kept unbreakable). Returns the inner char spans.
 export function splitInto(el, text, stagger = 18, base = 0) {
@@ -16,10 +26,7 @@ export function splitInto(el, text, stagger = 18, base = 0) {
       mask.className = "ch";
       const inner = document.createElement("span");
       inner.textContent = ch;
-      const delay = base + chars.length * stagger;
-      inner.style.transition = `transform 320ms ${EASE} ${delay}ms, opacity 280ms ease ${delay}ms`;
-      inner.style.transform = "translateY(110%)";
-      inner.style.opacity = "0";
+      prime(inner, 320, 280, base + chars.length * stagger);
       mask.appendChild(inner);
       w.appendChild(mask);
       chars.push(inner);
@@ -37,11 +44,33 @@ export function blockInto(el, text, base = 0) {
   mask.className = "blk";
   const inner = document.createElement("span");
   inner.textContent = text;
-  inner.style.transition = `transform 420ms ${EASE} ${base}ms, opacity 360ms ease ${base}ms`;
-  inner.style.transform = "translateY(110%)";
-  inner.style.opacity = "0";
+  prime(inner, 420, 360, base);
   mask.appendChild(inner);
   el.appendChild(mask);
+  return [inner];
+}
+
+// The same masked block rise for an element that keeps its own markup (links, code, lists).
+export function wrapInto(el, base = 0) {
+  const mask = document.createElement("span");
+  mask.className = "blk";
+  const inner = document.createElement("span");
+  inner.append(...el.childNodes);
+  prime(inner, 420, 360, base);
+  mask.appendChild(inner);
+  el.appendChild(mask);
+  return [inner];
+}
+
+// The same rise around an element whose own layout (flex, grid) must stay intact: the mask goes outside it.
+export function wrapAround(el, base = 0) {
+  const mask = document.createElement("div");
+  mask.className = "blk";
+  const inner = document.createElement("div");
+  el.replaceWith(mask);
+  inner.appendChild(el);
+  mask.appendChild(inner);
+  prime(inner, 420, 360, base);
   return [inner];
 }
 
@@ -51,13 +80,14 @@ export function show(chars) {
   chars.forEach((c) => hiddenSince.delete(c));
   requestAnimationFrame(() => requestAnimationFrame(() => chars.forEach((c) => {
     if (hiddenSince.has(c)) return;
-    c.style.transform = "translateY(0)"; c.style.opacity = "1";
+    c.style.transform = REDUCED ? "none" : "translateY(0)"; c.style.opacity = "1";
   })));
 }
 export function hide(chars, up = true) {
   chars.forEach((c) => {
     hiddenSince.add(c);
-    c.style.transform = up ? "translateY(-110%)" : "translateY(110%)"; c.style.opacity = "0";
+    if (!REDUCED) c.style.transform = up ? "translateY(-110%)" : "translateY(110%)";
+    c.style.opacity = "0";
   });
 }
 
@@ -132,35 +162,35 @@ export function makeLabel(host, def) {
   };
 }
 
-// Bottom station ticks: tall near the current station, short elsewhere.
-export function makeTicks(host, count, onPick) {
+// Bottom station ticks: tall near the current station, short elsewhere. labels: optional accessible names.
+export function makeTicks(host, count, onPick, labels = []) {
   const ticks = [];
   for (let i = 0; i < count; i++) {
     const b = document.createElement("button");
     b.className = "tick";
-    b.setAttribute("aria-label", `Jump to stop ${i + 1}`);
+    b.setAttribute("aria-label", labels[i] || `Jump to stop ${i + 1}`);
     const line = document.createElement("i");
     b.appendChild(line);
     b.addEventListener("click", () => onPick(i));
     host.appendChild(b);
     ticks.push(line);
   }
-  let shownAt = -1, hiddenAt = -1;
+  // Each tick rises over 520 ms, 30 ms after its left neighbour, and sinks right to left. Progress is kept per tick,
+  // so showing them again halfway through sinking turns them around where they are.
+  const rise = new Float32Array(count);
+  let want = false, changedAt = 0, last = -1;
   return {
     update(fIndex, visible, now) {
-      if (visible && shownAt < 0) { shownAt = now; hiddenAt = -1; }
-      if (!visible && shownAt >= 0 && hiddenAt < 0) hiddenAt = now;
-      if (!visible && hiddenAt >= 0 && now - hiddenAt > 900) shownAt = -1;
+      if (visible !== want) { want = visible; changedAt = now; }
+      const dt = last < 0 ? 0 : Math.min(50, now - last);
+      last = now;
       host.style.pointerEvents = visible ? "auto" : "none";
       ticks.forEach((t, i) => {
+        const delay = 30 * (want ? i : count - 1 - i);
+        if (now - changedAt >= delay) rise[i] = Math.max(0, Math.min(1, rise[i] + (want ? dt : -dt) / 520));
+        const k = rise[i] * rise[i] * (3 - 2 * rise[i]);
         const near = Math.max(0, 1 - Math.abs(i - fIndex) / 2);
-        let h = 24 + near * near * (3 - 2 * near) * 40;
-        const inK = shownAt < 0 ? 0 : Math.max(0, Math.min(1, (now - shownAt - 30 * i) / 520));
-        h *= inK * inK * (3 - 2 * inK);
-        if (hiddenAt >= 0) {
-          const outK = Math.max(0, Math.min(1, (now - hiddenAt - (count - 1 - i) * 30) / 520));
-          h *= 1 - outK * outK * (3 - 2 * outK);
-        }
+        const h = (24 + near * near * (3 - 2 * near) * 40) * k;
         const o = Math.max(0, 1 - Math.abs(i - fIndex) / 4);
         t.style.height = `${h}px`;
         t.style.opacity = String(0.15 + o * o * (3 - 2 * o) * 0.35);
@@ -264,11 +294,12 @@ export function makeResearchHud(root, stages, terms, stageOf, subOf) {
   };
 }
 
-// Springy magnetic pull toward the cursor.
-export function magnet(el, radius, strength) {
+// Springy magnetic pull toward the cursor. x: the element's own horizontal offset (the flight's button is
+// centred with -50%); rest: how far below its place it waits while inactive.
+export function magnet(el, radius, strength, { x = "-50%", rest = 32 } = {}) {
   const s = { x: 0, y: 0, vx: 0, vy: 0 };
   return (dt, ptr, active) => {
-    let tx = 0, ty = active ? 0 : 32;
+    let tx = 0, ty = active ? 0 : rest;
     if (active && ptr.has) {
       const r = el.getBoundingClientRect();
       const dx = ptr.x - (r.left + r.width / 2), dy = ptr.y - (r.top + r.height / 2);
@@ -279,6 +310,7 @@ export function magnet(el, radius, strength) {
     s.vx += ((tx - s.x) * 280 - 20 * s.vx) * h;
     s.vy += ((ty - s.y) * 280 - 20 * s.vy) * h;
     s.x += s.vx * h; s.y += s.vy * h;
-    el.style.transform = `translate(calc(-50% + ${s.x.toFixed(2)}px), ${s.y.toFixed(2)}px)`;
+    el.style.transform = `translate(calc(${x} + ${s.x.toFixed(2)}px), ${s.y.toFixed(2)}px)`;
+    return Math.abs(s.x - tx) + Math.abs(s.y - ty) + Math.abs(s.vx) + Math.abs(s.vy) > 0.05; // still moving
   };
 }

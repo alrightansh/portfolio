@@ -1,0 +1,27 @@
+---
+// Contact outro, the flight's last words and its button, plus the site index for readers without the menu.
+import { NAV, LINKS, PERSON } from "../data/site.js";
+const { path } = Astro.props;
+---
+<footer class="cta" id="contact">
+  <div class="cta-grid dots" aria-hidden="true"></div>
+  <div class="wrap">
+    <p class="kicker" data-split data-stagger="18">Contact</p>
+    <h2 class="cta-title" data-split data-stagger="35">Now let's map something</h2>
+    <div class="cta-row" data-block data-delay="200">
+      <a class="pill" href={LINKS.linkedin} rel="noopener" data-magnet>Say hello</a>
+      <a class="link" href={LINKS.linkedin} rel="noopener">LinkedIn <span class="arr ne" aria-hidden="true">↗</span></a>
+      <a class="link" href={LINKS.github} rel="noopener">GitHub <span class="arr ne" aria-hidden="true">↗</span></a>
+      {PERSON.resume && <a class="link" href={PERSON.resume}>Resume <span class="arr" aria-hidden="true">↓</span></a>}
+    </div>
+    <nav aria-label="All pages">
+      <ul class="cta-nav">
+        {NAV.map((n) => <li><a href={n.href} aria-current={n.href === path ? "page" : undefined}>{n.label}</a></li>)}
+      </ul>
+    </nav>
+    <div class="cta-foot">
+      <span class="caps">Made by {PERSON.name}</span>
+      <a class="caps" href="#main">Back to top ↑</a>
+    </div>
+  </div>
+</footer>

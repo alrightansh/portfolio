@@ -1,0 +1,16 @@
+---
+// An equation line in the style of the flight's RUSLE line, with a definition under each term.
+// terms: [{ key, show, def, op }] in reading order; op is the operator written before the term.
+interface Term { key: string; show: string; def: string; op?: string }
+interface Props { out: string; terms: Term[] }
+const { out, terms } = Astro.props;
+---
+<div class="eq" data-eq>
+  <p class="eq-line" data-block>
+    <span class="eq-out">{out}</span> =
+    {terms.map((t, i) => <>{i > 0 && ` ${t.op ?? "×"} `}<span data-term={t.key}>{t.show}</span></>)}
+  </p>
+  <dl class="eq-defs" data-items="fade">
+    {terms.map((t) => <div class="eq-def" data-term={t.key}><dt>{t.show}</dt><dd>{t.def}</dd></div>)}
+  </dl>
+</div>

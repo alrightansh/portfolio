@@ -1,0 +1,127 @@
+---
+import Page from "../../layouts/Page.astro";
+import Hero from "../../components/Hero.astro";
+import Status from "../../components/Status.astro";
+import SkillsMatrix from "../../components/SkillsMatrix.astro";
+import { PERSON, LINKS } from "../../data/site.js";
+
+const title = "Work · Anshuman Choudhary, Geospatial Engineer";
+const description = "Anshuman Choudhary, geospatial engineer: enterprise GIS and ArcGIS Utility Network migrations, spatial data engineering with PostgreSQL, PostGIS, FME and Python, analytics, AI for GIS and Earth observation.";
+const jsonLd = {
+  "@context": "https://schema.org", "@type": "ProfilePage",
+  mainEntity: {
+    "@type": "Person", name: PERSON.name, jobTitle: "Geospatial data scientist", url: "https://alrightansh.com/",
+    worksFor: { "@type": "Organization", name: PERSON.employer },
+    sameAs: [LINKS.linkedin, LINKS.github],
+    knowsAbout: ["Enterprise GIS", "ArcGIS Utility Network", "Smallworld to Esri migration", "PostGIS", "FME", "ArcPy",
+      "Power BI", "Remote sensing", "Geospatial data science", "MCP servers"],
+  },
+};
+
+const FOCUS = [
+  { title: "Utility network modernisation", text: "Smallworld to Esri migrations and the ArcGIS Utility Network: data models, rules, subnetworks and validation.", href: "/work/utility-network/#migration" },
+  { title: "Spatial data engineering", text: "PostgreSQL, PostGIS and the enterprise geodatabase, with FME and Python pipelines that make migrations repeatable.", href: "/work/utility-network/#databases" },
+  { title: "Analytics and reporting", text: "Network data shaped into SQL reporting layers and Power BI: overhead and underground mileage, asset classes.", href: "/work/utility-network/#reporting" },
+  { title: "AI meets GIS", text: "An MCP server that connects AI assistants to ArcGIS and Utility Network tasks.", href: "/work/ai/", status: "development" },
+  { title: "Earth observation", text: "Remote sensing and spatial modelling: soil erosion, solar and wind siting, snow, floods and landslides.", href: "/work/earth-observation/" },
+];
+---
+<Page title={title} description={description} path="/work/" type="website" jsonLd={jsonLd}>
+  <Hero a="Geospatial" b="engineer" seed={7} pre={PERSON.name}
+    lead="Enterprise GIS, utility networks, spatial data engineering, automation and AI, from Himachal Pradesh." />
+
+  <section class="section" aria-labelledby="about-title">
+    <div class="wrap split2">
+      <div>
+        <p class="kicker" data-split data-stagger="14">About</p>
+        <h2 class="h2" id="about-title" data-split data-delay="60">Maps, models and machines</h2>
+      </div>
+      <div>
+        <p class="lead" data-block>I work where enterprise GIS meets electric utility networks: moving legacy utility GIS to Esri, engineering
+          the spatial data behind it, and building the automation, analytics and AI tooling around it.</p>
+        <p class="body" data-block>At {PERSON.employer} I am a {PERSON.role.toLowerCase()} on {PERSON.team}. Alongside that I read the planet
+          from satellites, with advanced degrees in Geography and Remote Sensing and a habit of turning complex data into maps people can act on.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="focus-title">
+    <div class="wrap">
+      <p class="kicker" data-split data-stagger="14">Focus</p>
+      <h2 class="h2" id="focus-title" data-split data-delay="60">What I work on</h2>
+      <ol class="rows" data-items>
+        {FOCUS.map((f, i) => (
+          <li>
+            <a class="row" href={f.href}>
+              <span class="row-idx">{String(i + 1).padStart(2, "0")}</span>
+              <h3 class="row-title">{f.title}</h3>
+              <p class="row-text">{f.text}</p>
+              <span class="row-end">{f.status && <Status kind={f.status} />}<span class="bar-hint" aria-hidden="true"></span></span>
+            </a>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="exp-title">
+    <div class="wrap">
+      <p class="kicker" data-split data-stagger="14">Experience</p>
+      <h2 class="h2" id="exp-title" data-split data-delay="60">Where the work comes from</h2>
+      <div class="block exps">
+        <article class="exp" data-block>
+          <p class="exp-kind">Professional experience</p>
+          <div>
+            <h3 class="exp-head">{PERSON.employer} <span>· {PERSON.role}, {PERSON.team}</span></h3>
+            <ul>
+              <li>Delivered multiple iterations of bulk utility network migrations.</li>
+              <li>Enhancing Esri Utility Network systems and how they are deployed across enterprise asset management (EAM) platforms.</li>
+              <li>Automation end to end: Python, FME and CI/CD pipelines that turn months of migration work into repeatable runs.</li>
+              <li>Electric and gas (UPDM) data models, asset packages and rule bases.</li>
+              <li>Team management and product development, from first prototype to production.</li>
+            </ul>
+          </div>
+        </article>
+        <article class="exp" data-block>
+          <p class="exp-kind">Education and research</p>
+          <div>
+            <h3 class="exp-head">Geography and Remote Sensing <span>· advanced degrees</span></h3>
+            <ul>
+              <li>Dissertation: soil erosion risk in the Neugal watershed with RUSLE, AHP and GIS. <a class="link" href="/work/earth-observation/#neugal">Read it <span class="arr" aria-hidden="true">→</span></a></li>
+              <li>ISRO–IIRS advanced certifications in remote sensing.</li>
+            </ul>
+          </div>
+        </article>
+        <article class="exp" data-block>
+          <p class="exp-kind">Independent projects</p>
+          <div>
+            <h3 class="exp-head">Built and published here</h3>
+            <ul>
+              <li>Solar and wind hotspots across North India, and forests, snow, floods and landslides in Himachal Pradesh. <a class="link" href="/work/earth-observation/">Earth observation <span class="arr" aria-hidden="true">→</span></a></li>
+              <li>The 3D flight on this site: three.js, real elevation and three map stops built from open data. <a class="link" href="/">Fly it <span class="arr" aria-hidden="true">→</span></a></li>
+              <li>gispost, a local-LLM pipeline that reads GIS research every morning; Paper Peaks, vintage survey sheets raised into 3D
+                terrain; and MakeMeDizzy, a self-governing quant desk. <a class="link" href={LINKS.makemedizzy} rel="noopener">Visit the desk <span class="arr ne" aria-hidden="true">↗</span></a></li>
+            </ul>
+          </div>
+        </article>
+        <article class="exp" data-block>
+          <p class="exp-kind">In development</p>
+          <div>
+            <h3 class="exp-head">An MCP server for ArcGIS</h3>
+            <ul>
+              <li>AI assistants that query and inspect a Utility Network through typed tools. <a class="link" href="/work/ai/">Status and design <span class="arr" aria-hidden="true">→</span></a></li>
+            </ul>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="skills" aria-labelledby="skills-title">
+    <div class="wrap">
+      <p class="kicker" data-split data-stagger="14">Toolkit</p>
+      <h2 class="h2" id="skills-title" data-split data-delay="60">Technical skills</h2>
+      <SkillsMatrix />
+    </div>
+  </section>
+</Page>

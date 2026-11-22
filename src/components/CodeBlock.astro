@@ -1,0 +1,11 @@
+---
+// One illustrative snippet with a caption, highlighted like CodeTabs.
+import { Code } from "astro:components";
+import { codeTheme, styleToClass } from "../scripts/code-theme.js";
+interface Props { code: string; lang: string; caption: string }
+const { code, lang, caption } = Astro.props;
+---
+<figure class="code-one" data-block>
+  <figcaption class="caps-dim">{caption}</figcaption>
+  <Code code={code.trim()} lang={lang as any} theme={codeTheme as any} transformers={[styleToClass]} wrap={null} />
+</figure>

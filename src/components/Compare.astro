@@ -1,0 +1,15 @@
+---
+// A two-option comparison table (stacks into labelled rows on phones). It rises as one block.
+interface Row { k: string; a: string; b: string }
+interface Props { caption: string; a: string; b: string; rows: Row[] }
+const { caption, a, b, rows } = Astro.props;
+---
+<div data-block>
+  <table class="compare">
+    <caption class="caps-dim">{caption}</caption>
+    <thead><tr><th scope="col"><span class="sr-only">Aspect</span></th><th scope="col">{a}</th><th scope="col">{b}</th></tr></thead>
+    <tbody>
+      {rows.map((r) => <tr><th scope="row">{r.k}</th><td data-k={a}>{r.a}</td><td data-k={b}>{r.b}</td></tr>)}
+    </tbody>
+  </table>
+</div>

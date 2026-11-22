@@ -1,0 +1,24 @@
+---
+// Illustrative code in tabs, highlighted at build time in the site's palette (no inline styles: see code-theme.js).
+import { Code } from "astro:components";
+import { codeTheme, styleToClass } from "../scripts/code-theme.js";
+interface Tab { label: string; lang: string; code: string }
+interface Props { id: string; tabs: Tab[]; caption: string; label: string }
+const { id, tabs, caption, label } = Astro.props;
+---
+<div class="codetabs" data-tabs id={id}>
+  <div class="ct-head" data-block>
+    <p class="caps-dim">{caption}</p>
+    <div class="ct-tabs" role="tablist" aria-label={label}>
+      {tabs.map((t, i) => (
+        <button class="ct-tab" type="button" role="tab" id={`${id}-tab${i}`} aria-controls={`${id}-p${i}`}
+          aria-selected={i === 0 ? "true" : "false"} tabindex={i === 0 ? 0 : -1}>{t.label}</button>
+      ))}
+    </div>
+  </div>
+  {tabs.map((t, i) => (
+    <div class="ct-panel" role="tabpanel" id={`${id}-p${i}`} aria-labelledby={`${id}-tab${i}`} hidden={i !== 0}>
+      <Code code={t.code.trim()} lang={t.lang as any} theme={codeTheme as any} transformers={[styleToClass]} wrap={null} />
+    </div>
+  ))}
+</div>

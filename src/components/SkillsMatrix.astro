@@ -1,0 +1,19 @@
+---
+// Skills by area, each marked with how it has been used. Tiers, never percentages.
+import { TIERS, SKILLS } from "../data/skills.js";
+---
+<ul class="tiers" aria-label="Key" data-items="fade">
+  {Object.entries(TIERS).map(([k, t]) => <li><i class:list={["tier", `t-${k}`]} aria-hidden="true"></i>{t.label}</li>)}
+</ul>
+<div class="skills">
+  {SKILLS.map((g) => (
+    <section aria-labelledby={`sk-${g.id}`}>
+      <h3 id={`sk-${g.id}`} data-split data-stagger="18">{g.area}</h3>
+      <ul data-items="fade">
+        {g.items.map(([name, tier]) => (
+          <li class="skill"><i class:list={["tier", `t-${tier}`]} aria-hidden="true"></i>{name}<span class="sr-only"> ({TIERS[tier].label})</span></li>
+        ))}
+      </ul>
+    </section>
+  ))}
+</div>

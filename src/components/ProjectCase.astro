@@ -1,0 +1,37 @@
+---
+// One research project in the case-study template: heading, real image, key figures, and the facts
+// (problem, scope, data, method, results, limits, use, tools). Links to its stop in the 3D flight.
+import Figure from "./Figure.astro";
+import Status from "./Status.astro";
+const { p, n, of } = Astro.props;
+const pad = (v: number) => String(v).padStart(2, "0");
+---
+<section class="case" id={p.id} data-chapter={p.title} aria-labelledby={`${p.id}-title`}>
+  <div class="wrap">
+    <header class="case-head">
+      <div>
+        <p class="idx" data-split data-stagger="14">{pad(n)} / {pad(of)}</p>
+        <h2 class="h2" id={`${p.id}-title`} data-split data-delay="60">{p.title}</h2>
+        <p class="sub" data-split data-stagger="12" data-delay="220">{p.sub}</p>
+      </div>
+      <div class="case-tags" data-block data-delay="300"><Status label={p.kind} /></div>
+    </header>
+    <div class="case-body">
+      <div>
+        <Figure src={p.img.src} w={p.img.w} h={p.img.h} alt={p.img.alt} caption={p.img.caption} credit={p.img.credit}
+          sizes="(max-width: 1100px) 100vw, 55vw" />
+        <div class="stats" data-items="fade">
+          {p.stats.map((s) => <div><div class="stat-num">{s.num}</div><div class="stat-unit">{s.unit}</div></div>)}
+        </div>
+      </div>
+      <div>
+        <dl class="facts" data-items="fade">
+          {p.facts.map(([k, v]) => <div><dt>{k}</dt><dd>{v}</dd></div>)}
+        </dl>
+        <div class="case-links" data-block>
+          <a class="link" href={p.fly}>Fly to it in 3D <span class="arr" aria-hidden="true">→</span></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

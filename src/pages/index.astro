@@ -1,17 +1,38 @@
 ---
 // The state of alrightansh: a flight over a living contour field into the void.
+import "../styles/base.css";
+import { PERSON, LINKS } from "../data/site.js";
+
+const ld = [
+  { "@context": "https://schema.org", "@type": "WebSite", name: "alrightansh", url: "https://alrightansh.com/" },
+  {
+    "@context": "https://schema.org", "@type": "Person", name: PERSON.name, url: "https://alrightansh.com/",
+    jobTitle: "Geospatial data scientist", worksFor: { "@type": "Organization", name: PERSON.employer },
+    sameAs: [LINKS.linkedin, LINKS.github],
+    knowsAbout: ["Enterprise GIS", "ArcGIS Utility Network", "Smallworld to Esri migration", "Electric utility GIS", "PostGIS",
+      "FME", "ArcPy", "Remote sensing", "Geospatial data science", "AI for GIS"],
+  },
+];
 ---
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Anshuman Choudhary | Geospatial Data Scientist | alrightansh</title>
-  <meta name="description" content="Anshuman Choudhary, geospatial data scientist: utility network migrations, electric and gas UPDM, remote sensing and GeoAI, told through maps." />
+  <title>Anshuman Choudhary | Geospatial Engineer, Enterprise GIS | alrightansh</title>
+  <meta name="description" content="Geospatial engineer Anshuman Choudhary: Smallworld to Esri utility network migrations, ArcGIS Utility Network, PostGIS and FME data engineering, remote sensing and AI for GIS, told through maps." />
   <link rel="canonical" href="https://alrightansh.com/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="alrightansh" />
+  <meta property="og:url" content="https://alrightansh.com/" />
   <meta property="og:title" content="The state of alrightansh" />
   <meta property="og:description" content="Maps, models and machines: a flight through the work of Anshuman Choudhary." />
+  <meta property="og:image" content="https://alrightansh.com/og.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="author" content={PERSON.name} />
+  <script type="application/ld+json" is:inline set:html={JSON.stringify(ld)} />
   <meta name="theme-color" content="#07090f" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="preload" href="/fonts/OverusedGrotesk-Regular.woff2" as="font" type="font/woff2" crossorigin />
@@ -19,26 +40,13 @@
   <link rel="preload" href="/research/neugal-dem.bin" as="fetch" crossorigin="anonymous" />
   <link rel="preload" href="/research/osm.json" as="fetch" crossorigin="anonymous" />
   <style is:global>
-    @font-face { font-family: "Overused Grotesk"; src: url("/fonts/OverusedGrotesk-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
-    @font-face { font-family: "Overused Grotesk"; src: url("/fonts/OverusedGrotesk-Medium.woff2") format("woff2"); font-weight: 500; font-display: swap; }
-    :root { --bg: #07090f; --fg: #d2e4f2; --dim: #a9b6c4; --accent: #8fd3ff; --pad: 40px; }
-    * { box-sizing: border-box; }
+    /* fonts, tokens and the reveal primitives live in styles/base.css */
     html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg);
       overscroll-behavior: none; }
     body { font-family: "Overused Grotesk", system-ui, sans-serif; -webkit-font-smoothing: antialiased;
       touch-action: none; user-select: none; }
-    a { color: inherit; text-decoration: none; }
     canvas#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
-    /* masked character reveal */
-    .wd { display: inline-block; white-space: nowrap; }
-    .ch { display: inline-block; overflow: hidden; vertical-align: bottom; line-height: 1.2; }
-    .ch > span { display: inline-block; will-change: transform; }
-    .swap { display: inline-grid; }
-    .swap-layer { grid-area: 1 / 1; white-space: nowrap; }
-    /* paragraphs reveal as one masked block (ui.js blockInto) */
-    .blk { display: block; overflow: hidden; }
-    .blk > span { display: block; will-change: transform; }
     /* readability over the moving scene: a dark halo on small text and a soft dark pool behind paragraphs */
     #heroP, .st-label, .rs-head, .rs-step, .rs-stat, .rs-eq { text-shadow: 0 0 2px rgba(7, 9, 15, 0.9), 0 0 10px rgba(7, 9, 15, 0.7); }
     #heroP::before, .st-cap::before, .st-post::before { content: ""; position: absolute; inset: -24px -48px; z-index: -1;
@@ -49,10 +57,8 @@
     /* chrome */
     .top { position: fixed; inset: 0 0 auto 0; z-index: 30; display: flex; align-items: center;
       justify-content: space-between; padding: 30px var(--pad); pointer-events: none; }
-    .caps { font-size: 14px; letter-spacing: 0.02em; text-transform: uppercase; mix-blend-mode: difference; }
-    .logo { position: absolute; left: 50%; top: 22px; transform: translateX(-50%); font-size: 21px;
-      letter-spacing: -0.01em; mix-blend-mode: difference; pointer-events: auto; }
-    .logo b { font-weight: 500; }
+    .top-r { display: flex; align-items: center; gap: 36px; }
+    #workLink { pointer-events: auto; }
     #audioBtn { pointer-events: auto; cursor: pointer; display: inline-flex; gap: 10px; align-items: center;
       background: none; border: 0; color: inherit; font: inherit; padding: 0; }
     .eq { display: inline-flex; gap: 3px; align-items: center; height: 12px; }
@@ -193,13 +199,15 @@
     #outroBtn { position: fixed; z-index: 15; left: 50%; top: 56%; padding: 18px 42px; border-radius: 19px;
       background: var(--accent); color: #07090f; font-size: 16px; opacity: 0;
       transition: opacity 360ms ease; transform: translate(-50%, 32px); }
+    #outroWork { position: fixed; z-index: 15; left: 50%; top: calc(56% + 112px); transform: translateX(-50%);
+      font-size: 14px; letter-spacing: 0.02em; text-transform: uppercase; border-bottom: 1px solid currentColor;
+      opacity: 0; pointer-events: none; transition: opacity 360ms ease 200ms, color 0.35s ease; }
+    #outroWork:hover { color: var(--accent); }
+    .noscript { position: fixed; z-index: 99; left: var(--pad); right: var(--pad); bottom: 40px; margin: 0; font-size: 14px;
+      letter-spacing: 0.02em; text-transform: uppercase; }
+    .noscript a { border-bottom: 1px solid currentColor; }
 
-    /* station ticks */
-    #ticks { position: fixed; z-index: 20; bottom: 0; left: 50%; transform: translateX(-50%); display: flex;
-      align-items: flex-end; gap: 4px; height: 80px; }
-    .tick { width: 14px; height: 100%; display: flex; align-items: flex-end; justify-content: center;
-      background: none; border: 0; padding: 0; cursor: pointer; }
-    .tick i { display: block; width: 1px; height: 0; background: var(--fg); opacity: 0.15; }
+    /* station ticks: base styles in styles/base.css */
 
     /* preloader */
     #loader { position: fixed; inset: 0; z-index: 90; background: var(--bg); transition: opacity 0.8s ease, visibility 0.8s; }
@@ -215,10 +223,7 @@
 
     /* phones: one column, text in bands above and below the 3D object, safe-area aware */
     @media (max-width: 768px) {
-      :root { --pad: 20px; --top: calc(20px + env(safe-area-inset-top)); --bottom: calc(28px + env(safe-area-inset-bottom)); }
       .top { padding: var(--top) var(--pad) 0; }
-      .logo { top: calc(var(--top) - 4px); font-size: 19px; }
-      .caps { font-size: 11px; }
       .bl, .br { bottom: var(--bottom); }
       .br { display: none; }
       #hint { position: fixed; right: var(--pad); bottom: var(--bottom); }
@@ -240,6 +245,9 @@
       .st-link { margin-top: 14px; font-size: 13px; padding: 6px 0; }
       #outroLabel { top: 42%; width: calc(100vw - 2 * var(--pad)); }
       #outroBtn { top: 62%; padding: 16px 38px; }
+      #outroWork { top: calc(62% + 100px); font-size: 12px; white-space: nowrap; }
+      .top-r { flex: 1; justify-content: space-between; }
+      .noscript { bottom: var(--bottom); font-size: 12px; }
       #ticks { height: 56px; bottom: env(safe-area-inset-bottom); }
       #loaderPct { bottom: var(--bottom); }
 
@@ -281,18 +289,24 @@
     <div id="loaderPct">0%</div>
   </div>
 
+  <div id="bar" aria-hidden="true"></div>
+  <noscript><p class="noscript">The flight needs JavaScript. <a href="/work/">Read the work instead</a></p></noscript>
+
   <header class="top">
     <span class="caps" id="hint"></span>
     <a class="logo" href="/" aria-label="alrightansh home"><b>alright</b>ansh</a>
-    <button class="caps" id="audioBtn" type="button" aria-label="Toggle ambient audio">
-      <span id="audioLabel"></span><span class="eq" id="eq"><i></i><i></i><i></i></span>
-    </button>
+    <div class="top-r">
+      <a class="caps" id="workLink" href="/work/" data-reveal="Work" aria-label="Work: case studies, experience and skills">Work</a>
+      <button class="caps" id="audioBtn" type="button" aria-label="Toggle ambient audio">
+        <span id="audioLabel"></span><span class="eq" id="eq"><i></i><i></i><i></i></span>
+      </button>
+    </div>
   </header>
   <a class="caps bl" href="https://www.linkedin.com/in/alrightansh/" rel="noopener" data-reveal="Share"></a>
   <span class="caps br" data-reveal="Made by Anshuman Choudhary"></span>
 
   <h1 class="hero" id="heroA" data-text="Anshuman">Anshuman Choudhary</h1>
-  <p id="heroP" data-text="Geospatial data scientist from Himachal Pradesh. I migrate utility networks, read the planet from satellites, and tell great stories from complex data through maps."></p>
+  <p id="heroP" data-text="Geospatial engineer from Himachal Pradesh. I migrate utility networks to Esri, engineer the spatial data behind them, read the planet from satellites, and tell great stories from complex data through maps."></p>
   <div class="hero" id="heroB" data-text="Choudhary" aria-hidden="true"></div>
 
   <div id="labels"></div>
@@ -367,6 +381,7 @@
   </section>
   <div id="outroLabel"></div>
   <a id="outroBtn" href="https://www.linkedin.com/in/alrightansh/" rel="noopener">Say hello</a>
+  <a id="outroWork" href="/work/">Or read the case studies</a>
   <nav id="ticks" aria-label="Stops"></nav>
 
   <script>

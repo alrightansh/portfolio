@@ -1,0 +1,130 @@
+---
+// An illustrative electric Utility Network: one feeder from a substation breaker to an open point, with a tap to a
+// pole-mounted transformer and its low-voltage secondary, and an underground run through pad-mounted switchgear.
+// Not a real network. Parts carry data-part keys that the legend highlights (scripts/page-network.js).
+const LEGEND = [
+  { key: "controller", term: "Subnetwork controller", def: "Where a subnetwork starts: here the feeder's circuit breaker. A transformer's low side starts the low-voltage tier below it." },
+  { key: "line", term: "Lines", def: "Overhead conductor and underground cable (dashed): the edges every trace runs along." },
+  { key: "device", term: "Devices", def: "Breakers, switches, fuses and transformers. Terminals tell a trace which side is which, high side or low side." },
+  { key: "junction", term: "Junctions", def: "Connection points such as the tap, where lines meet without a device." },
+  { key: "structure", term: "Structures", def: "Poles and the substation, in the structure network that carries the equipment." },
+  { key: "assembly", term: "Assembly", def: "Pad-mounted switchgear: one feature that contains the devices inside it." },
+  { key: "association", term: "Associations", def: "Containment (inside the switchgear), structural attachment (transformer on its pole) and connectivity (cable to switch without touching)." },
+  { key: "subnetwork", term: "Subnetworks", def: "The medium-voltage feeder and the low-voltage secondary, one in each tier, bounded by the open point and the transformer." },
+  { key: "dirty", term: "Dirty area", def: "An edit the topology has not validated yet. Validation clears it or reports an error." },
+];
+const { id = "net" } = Astro.props;
+---
+<div class="net" data-net id={id}>
+  <figure class="net-fig">
+    <div class="net-canvas dots">
+      <svg class="net-svg" viewBox="0 90 1000 440" role="img" aria-labelledby={`${id}-t ${id}-d`}>
+        <title id={`${id}-t`}>Illustrative Utility Network schematic</title>
+        <desc id={`${id}-d`}>A medium-voltage feeder leaves a substation circuit breaker, its subnetwork controller, and runs overhead
+          past a switch and a tap. The tap feeds a pole-mounted transformer whose low side starts a low-voltage subnetwork to three
+          services. The feeder turns underground at a riser into pad-mounted switchgear that contains two switches, and ends at a
+          normally open point next to an adjacent feeder.</desc>
+        <defs>
+          <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="6" height="6" fill="rgba(255, 107, 87, 0.06)" />
+            <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(255, 107, 87, 0.55)" stroke-width="1.5" />
+          </pattern>
+        </defs>
+
+        <!-- subnetwork extents (what Update Subnetwork stores as SubnetLines) -->
+        <path class="band mv-band" data-part="subnetwork" d="M136 210H700M480 210V319M700 210V330H933" />
+        <path class="band lv-band" data-part="subnetwork" d="M480 359V420M380 420H600M480 420V480" />
+
+        <!-- structures: the substation boundary and the poles -->
+        <rect class="bound fade" data-part="structure" x="40" y="120" width="170" height="180" rx="16" />
+
+        <!-- lines -->
+        <path class="ln mv draw" data-part="line" pathLength="1" d="M136 210H700" />
+        <path class="ln mv draw" data-part="line" pathLength="1" d="M480 210V319" />
+        <path class="ln mv ug fade" data-part="line" d="M700 210V330H760" />
+        <path class="ln mv ug fade" data-part="line" d="M852 330H933" />
+        <path class="ln mv draw" data-part="line assembly" pathLength="1" d="M802 330H840" />
+        <path class="ln lv draw" data-part="line" pathLength="1" d="M480 359V420" />
+        <path class="ln lv draw" data-part="line" pathLength="1" d="M380 420H600" />
+        <path class="ln lv draw" data-part="line" pathLength="1" d="M480 420V480" />
+        <path class="ln other ug fade" data-part="line subnetwork" d="M940 337V470H740" />
+
+        <!-- associations: containment box, structural attachment, connectivity -->
+        <rect class="asm fade" data-part="assembly association" x="760" y="300" width="120" height="60" rx="12" />
+        <path class="assoc fade" data-part="association" d="M427 339H466" />
+        <path class="assoc fade" data-part="association" d="M763 330H787" />
+
+        <rect class="dirty fade" data-part="dirty" x="556" y="394" width="70" height="52" rx="6" />
+
+        <!-- trace overlay, drawn by the trace button -->
+        <path class="trace" data-trace-path="0" pathLength="1" d="M136 210H480" />
+        <path class="trace" data-trace-path="1" pathLength="1" d="M480 210V319" />
+        <path class="trace" data-trace-path="1" pathLength="1" d="M480 210H700V330H933" />
+
+        <!-- structures on the line -->
+        <circle class="pole pop" data-part="structure" cx="270" cy="210" r="7" />
+        <circle class="pole pop" data-part="structure" cx="400" cy="210" r="7" />
+        <circle class="pole pop" data-part="structure" cx="580" cy="210" r="7" />
+        <circle class="pole pop" data-part="structure" cx="700" cy="210" r="7" />
+        <circle class="pole pop" data-part="structure association" cx="418" cy="339" r="7" />
+
+        <!-- junctions -->
+        <circle class="jn pop" data-part="junction" cx="480" cy="210" r="5.5" />
+        <circle class="jn pop" data-part="junction" cx="700" cy="210" r="3.5" />
+
+        <!-- devices -->
+        <circle class="ring pop" data-part="controller" cx="125" cy="210" r="22" />
+        <rect class="dev pop" data-part="controller device" x="114" y="199" width="22" height="22" />
+        <rect class="dev pop" data-part="device" x="329" y="204" width="12" height="12" />
+        <rect class="dev pop" data-part="device" x="476" y="254" width="8" height="16" />
+        <g class="pop" data-part="device controller">
+          <circle class="tx" cx="480" cy="330" r="11" />
+          <circle class="tx" cx="480" cy="348" r="11" />
+        </g>
+        <rect class="dev pop" data-part="device assembly" x="790" y="324" width="12" height="12" />
+        <rect class="dev pop" data-part="device assembly" x="840" y="324" width="12" height="12" />
+        <rect class="open pop" data-part="device subnetwork" x="933" y="323" width="14" height="14" />
+        <circle class="svc pop" data-part="device" cx="380" cy="420" r="4.5" />
+        <circle class="svc pop" data-part="device" cx="600" cy="420" r="4.5" />
+        <circle class="svc pop" data-part="device" cx="480" cy="480" r="4.5" />
+        <circle class="op-ring" cx="940" cy="330" r="16" />
+
+        <!-- labels -->
+        <g class="labels">
+          <text class="lbl" data-part="structure" x="125" y="146" text-anchor="middle">SUBSTATION</text>
+          <text class="lbl" data-part="controller device" x="125" y="256" text-anchor="middle">CIRCUIT BREAKER</text>
+          <text class="lbl tier" data-part="subnetwork" x="224" y="192">MEDIUM VOLTAGE</text>
+          <text class="lbl minor" data-part="structure" x="270" y="238" text-anchor="middle">POLE</text>
+          <text class="lbl" data-part="device" x="335" y="238" text-anchor="middle">SWITCH</text>
+          <text class="lbl" data-part="junction" x="480" y="192" text-anchor="middle">TAP</text>
+          <text class="lbl minor" data-part="device" x="494" y="266">FUSE</text>
+          <text class="lbl" data-part="device controller" x="502" y="343">TRANSFORMER</text>
+          <text class="lbl minor" data-part="structure association" x="418" y="366" text-anchor="middle">POLE</text>
+          <text class="lbl tier lv-t" data-part="subnetwork" x="392" y="404">LOW VOLTAGE</text>
+          <text class="lbl minor" data-part="device" x="380" y="446" text-anchor="middle">SERVICE</text>
+          <text class="lbl coral" data-part="dirty" x="591" y="464" text-anchor="middle">DIRTY AREA</text>
+          <text class="lbl" data-part="structure" x="700" y="192" text-anchor="middle">RISER POLE</text>
+          <text class="lbl" data-part="assembly association" x="820" y="288" text-anchor="middle">SWITCHGEAR</text>
+          <text class="lbl coral" data-part="device subnetwork" x="940" y="304" text-anchor="middle">OPEN POINT</text>
+          <text class="lbl dim" data-part="subnetwork line" x="840" y="492" text-anchor="middle">ADJACENT FEEDER</text>
+        </g>
+      </svg>
+    </div>
+    <p class="net-hint caps-dim" aria-hidden="true">Swipe sideways to see the whole feeder</p>
+    <div class="net-foot">
+      <button class="btn" type="button" data-trace>Run a subnetwork trace</button>
+      <p class="net-status" aria-live="polite">Illustrative schematic, not a real network. Point at a part to find it.</p>
+    </div>
+  </figure>
+  <ul class="legend" aria-label="Diagram legend">
+    {LEGEND.map((l) => (
+      <li>
+        <button class="lg-btn" type="button" data-key={l.key} aria-pressed="false">
+          <span class:list={["sw", `sw-${l.key}`]} aria-hidden="true"></span>
+          <span class="lg-term">{l.term}</span>
+          <span class="lg-def">{l.def}</span>
+        </button>
+      </li>
+    ))}
+  </ul>
+</div>

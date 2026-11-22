@@ -1,0 +1,168 @@
+---
+import Page from "../../layouts/Page.astro";
+import Hero from "../../components/Hero.astro";
+import Chapter from "../../components/Chapter.astro";
+import Flow from "../../components/Flow.astro";
+import NetworkDiagram from "../../components/NetworkDiagram.astro";
+import Equation from "../../components/Equation.astro";
+import CodeTabs from "../../components/CodeTabs.astro";
+import CodeBlock from "../../components/CodeBlock.astro";
+import Compare from "../../components/Compare.astro";
+import { MIGRATION, FME, REPORTING } from "../../data/flows.js";
+import { MILEAGE_SQL, SQL_TABS, PY_TABS } from "../../data/code.js";
+import { PERSON } from "../../data/site.js";
+
+const N = 7;
+const title = "Utility Network Engineering: Smallworld to Esri · Anshuman Choudhary";
+const description = "Enterprise GIS case study: Smallworld to Esri migration, ArcGIS Utility Network concepts, PostgreSQL and PostGIS engineering, FME and Python automation, and Power BI reporting for electric utilities.";
+const jsonLd = {
+  "@context": "https://schema.org", "@type": "Article",
+  headline: "Enterprise GIS and Utility Network engineering",
+  description, author: { "@type": "Person", name: PERSON.name, url: "https://alrightansh.com/" },
+  about: ["ArcGIS Utility Network", "Smallworld to Esri migration", "Electric utility GIS", "PostGIS", "FME", "ArcPy", "Power BI"],
+};
+---
+<Page title={title} description={description} path="/work/utility-network/" crumb={{ href: "/work/", label: "Work" }} jsonLd={jsonLd}>
+  <Hero a="Utility" b="networks" seed={23} pre="Case study · Enterprise GIS"
+    lead="From legacy Smallworld data to a validated ArcGIS Utility Network, and the data engineering around it." />
+
+  <section class="section" aria-label="Project overview">
+    <div class="wrap">
+      <dl class="overview" data-items="fade">
+        <div><dt>Category</dt><dd>Enterprise electric utility GIS</dd></div>
+        <div><dt>Status</dt><dd>Professional work, ongoing</dd></div>
+        <div><dt>Role</dt><dd>Geospatial data scientist, Esri Platinum team at PwC</dd></div>
+        <div><dt>Stack</dt><dd>ArcGIS Pro, ArcGIS Enterprise, Utility Network, PostgreSQL, PostGIS, FME, Python, ArcPy, Power BI</dd></div>
+      </dl>
+      <p class="note" data-block>Client names, systems, data and screenshots stay confidential. Every diagram and code sample on this page is
+        illustrative and uses generic names.</p>
+    </div>
+  </section>
+
+  <Chapter id="migration" n={1} of={N} title="Smallworld to Esri" sub="A migration is a pipeline, not a one-off export" label="Migration">
+    <p class="lead" data-block>Moving an electric utility from GE Smallworld to Esri is less about converting files than about carrying a
+      network's behaviour across: what connects to what, what sits inside what, and which device feeds which customer.</p>
+    <p class="body" data-block>I have delivered bulk utility migrations over multiple iterations. Python, FME and CI/CD turn each iteration
+      into a repeatable run instead of a rebuild, so months of migration work become something that can be re-run, checked and compared.</p>
+    <Flow id="migration-flow" steps={MIGRATION} mode="scroll" label="Smallworld to Esri migration lifecycle"
+      kicker="Migration lifecycle · 8 stages" caption="The lifecycle in general terms. Each project tunes the stages to its data." />
+  </Chapter>
+
+  <Chapter id="utility-network" n={2} of={N} title="ArcGIS Utility Network" sub="How the network knows what it is" label="Utility Network">
+    <p class="lead" data-block>The Utility Network models a grid as connected features with rules, not lines on a map. Domain networks hold
+      the electric distribution and transmission systems, tiers split them into levels such as medium and low voltage, and rules decide what may
+      connect to, sit inside or attach to what.</p>
+    <NetworkDiagram id="un" />
+    <div class="gloss">
+      <div data-block>
+        <h4>Structure</h4>
+        <dl>
+          <dt>Domain networks</dt><dd>Electric distribution and transmission each sit in a domain network, sharing one structure network of poles, vaults and ducts.</dd>
+          <dt>Tiers</dt><dd>Levels such as medium and low voltage, each split into subnetworks. Electric networks usually use a partitioned tier definition; gas and water often use hierarchical tiers with tier groups.</dd>
+          <dt>Network rules</dt><dd>Connectivity, containment and structural attachment rules list which asset types may connect, contain or attach. Anything else is an error on validation.</dd>
+        </dl>
+      </div>
+      <div data-block data-delay="80">
+        <h4>Subnetworks</h4>
+        <dl>
+          <dt>Subnetwork controllers</dt><dd>Sources such as a feeder's circuit breaker define where each subnetwork starts and which way it flows.</dd>
+          <dt>Update Subnetwork</dt><dd>Stores each subnetwork's traced extent as a SubnetLine and records membership on its features.</dd>
+          <dt>Dirty areas and validation</dt><dd>Edits leave dirty areas; validating the topology clears them and reports errors that block subnetwork updates.</dd>
+        </dl>
+      </div>
+      <div data-block data-delay="160">
+        <h4>Tracing and platform</h4>
+        <dl>
+          <dt>Network attributes</dt><dd>Values the network can read while tracing, such as whether a device is open or closed.</dd>
+          <dt>Traces</dt><dd>Upstream, downstream, subnetwork, connected, isolation and shortest path, kept as named trace configurations.</dd>
+          <dt>Enterprise geodatabase</dt><dd>Multi-user editing runs in an enterprise geodatabase with branch versioning, published through ArcGIS Enterprise as services.</dd>
+        </dl>
+      </div>
+    </div>
+  </Chapter>
+
+  <Chapter id="network-data" n={3} of={N} title="Overhead and underground" sub="Mileage from network data" label="Network data">
+    <p class="lead" data-block>How many miles of line run overhead, and how many underground, on each circuit? The answer comes from
+      overlaying each subnetwork's extent with the electric lines, classing every line by its asset group, and measuring length in the database.</p>
+    <Equation out="miles" terms={[
+      { key: "len", show: "ST_Length(geom)", def: "Length of each line in its coordinate system's units: metres in a projected system. Check the spatial reference first; geographic coordinates need a geography cast or a projection." },
+      { key: "km", show: "1000", op: "÷", def: "Metres to kilometres." },
+      { key: "mi", show: "0.62", op: "×", def: "Kilometres to miles. The exact factor is 0.621371; 0.62 is the working approximation." },
+    ]} />
+    <ol class="steps" data-items>
+      <li><h4><span>01</span>Classify</h4><p>Group lines into overhead, underground or other from their asset group, using the agreed business mapping.</p></li>
+      <li><h4><span>02</span>Overlay</h4><p>Intersect each subnetwork's SubnetLine with the electric lines, so every metre is credited to its circuit.</p></li>
+      <li><h4><span>03</span>Measure</h4><p>Sum the lengths per subnetwork and class in SQL, then convert to miles.</p></li>
+      <li><h4><span>04</span>Validate</h4><p>Watch for double counting where geometries overlap or lines are split, and reconcile totals against the source attributes.</p></li>
+    </ol>
+    <CodeBlock code={MILEAGE_SQL} lang="sql" caption="Illustrative PostGIS · generic names" />
+  </Chapter>
+
+  <Chapter id="databases" n={4} of={N} title="Spatial databases" sub="PostgreSQL, PostGIS and the enterprise geodatabase" label="Spatial databases">
+    <div class="split2">
+      <div>
+        <p class="lead" data-block>An enterprise geodatabase is still a PostgreSQL database underneath. Knowing both layers lets quality
+          checks, overlays and reporting run as set-based SQL next to the data, while edits keep flowing through ArcGIS.</p>
+        <ul class="chips" data-items="fade" aria-label="Capabilities">
+          <li>Spatial SQL</li><li>Geometry operations</li><li>Spatial joins</li><li>Spatial indexing</li><li>Query plans</li>
+          <li>Aggregation</li><li>Data quality checks</li><li>Feature class management</li>
+        </ul>
+      </div>
+      <div>
+        <p class="body" data-block>Branch versioning keeps every edit as a row in the same table. Reporting SQL has to resolve the current
+          state of the default version, the latest row per feature that is not a delete, or read through a published service. Those
+          versioning columns are geodatabase metadata, not asset attributes, and never belong in a report.</p>
+        <p class="body" data-block>In a PostgreSQL geodatabase the shape column can be PostGIS geometry or Esri's ST_Geometry; with the
+          latter, the sde.st_* functions stand in for the PostGIS ones used here.</p>
+      </div>
+    </div>
+    <CodeTabs id="sql" tabs={SQL_TABS} caption="Illustrative PostGIS · generic names" label="SQL examples" />
+  </Chapter>
+
+  <Chapter id="etl" n={5} of={N} title="FME automation" sub="Enterprise GIS ETL that re-runs on demand" label="FME automation">
+    <p class="lead" data-block>FME carries the heavy lifting of a migration: reading source formats, mapping attributes, reshaping geometry and
+      writing to PostgreSQL or the geodatabase. SQL and Python fill the gaps that transformers alone handle poorly.</p>
+    <Flow id="fme-flow" steps={FME} label="FME workflow from source data to PostgreSQL or Esri"
+      caption="A typical workspace. Transformers shown are common choices, not the record of one project." />
+    <div class="split2 block">
+      <div data-block>
+        <h3 class="h3">SQL where the data is</h3>
+        <p class="body">SQLExecutor runs lookups, spatial joins and aggregates inside PostgreSQL, next to the indexes, instead of pulling every
+          feature through the workspace.</p>
+      </div>
+      <div data-block data-delay="80">
+        <h3 class="h3">Python where logic is</h3>
+        <p class="body">PythonCaller and scripted runners cover custom parsing, API calls and anything easier to test as code. Scheduled, the
+          workspaces become a pipeline that runs batch after batch, ZIP archives included.</p>
+      </div>
+    </div>
+  </Chapter>
+
+  <Chapter id="python" n={6} of={N} title="Python and ArcPy" sub="Python-powered GIS engineering" label="Python and ArcPy">
+    <p class="lead" data-block>Python ties the stack together: ArcPy for geodatabase and geoprocessing work, a SQL driver for PostGIS, and plain
+      Python for batch runs, checks and reports.</p>
+    <CodeTabs id="py" tabs={PY_TABS} caption="Demonstrations · placeholder paths" label="Python examples" />
+  </Chapter>
+
+  <Chapter id="reporting" n={7} of={N} title="Power BI" sub="From network data to operational insight" label="Reporting">
+    <p class="lead" data-block>Reporting reads from PostgreSQL, not from map layers. SQL views shape the network into a reporting model, and
+      Power BI turns it into dashboards that filter by circuit, voltage class and placement.</p>
+    <Flow id="bi-flow" steps={REPORTING} label="Reporting architecture from enterprise GIS to Power BI" />
+    <Compare caption="Import or DirectQuery" a="Import" b="DirectQuery" rows={[
+      { k: "Freshness", a: "As of the last scheduled refresh", b: "Live at query time" },
+      { k: "Speed", a: "Fast: the data sits in memory", b: "Bound by the database and the network" },
+      { k: "Model size", a: "Limited by capacity: all rows are stored", b: "Nothing stored but the model" },
+      { k: "Database load", a: "Only while refreshing", b: "Every visual interaction sends queries" },
+      { k: "Modelling", a: "Full Power Query and DAX", b: "Some transformations and functions are limited" },
+    ]} />
+    <p class="body" data-block>Import suits mileage and asset summaries refreshed on a schedule; DirectQuery suits small, filtered views that
+      must be live. Either way, geometry stays out of the model: lengths are measured in SQL and only the numbers travel.</p>
+  </Chapter>
+
+  <nav class="next wrap" aria-label="Next case study">
+    <a href="/work/ai/">
+      <span class="idx" data-split data-stagger="14">Next</span>
+      <span class="next-title" data-split>AI meets GIS <span class="arr">→</span></span>
+    </a>
+  </nav>
+</Page>

@@ -1,0 +1,87 @@
+---
+import Page from "../../layouts/Page.astro";
+import Hero from "../../components/Hero.astro";
+import Chapter from "../../components/Chapter.astro";
+import Flow from "../../components/Flow.astro";
+import Status from "../../components/Status.astro";
+import Figure from "../../components/Figure.astro";
+import { MCP } from "../../data/flows.js";
+import { PROJECT_STATUS, CAPABILITIES, PRINCIPLES } from "../../data/ai.js";
+import { STATUS, PERSON } from "../../data/site.js";
+
+const N = 4;
+// capabilities grouped by maturity, most mature first; empty statuses are left out
+const groups = Object.keys(STATUS).map((kind) => ({ kind, items: CAPABILITIES.filter((c) => c.status === kind) })).filter((g) => g.items.length);
+const title = "AI meets GIS: an MCP server for ArcGIS · Anshuman Choudhary";
+const description = "AI meets geospatial engineering: a custom MCP server that connects AI assistants to ArcGIS and the Utility Network. Architecture, capabilities with honest status labels, and local-LLM GIS work.";
+const jsonLd = {
+  "@context": "https://schema.org", "@type": "Article", headline: "AI meets geospatial engineering", description,
+  author: { "@type": "Person", name: PERSON.name, url: "https://alrightansh.com/" },
+  about: ["Model Context Protocol", "MCP server", "ArcGIS", "Utility Network", "AI GIS", "LLM"],
+};
+---
+<Page title={title} description={description} path="/work/ai/" crumb={{ href: "/work/", label: "Work" }} jsonLd={jsonLd}>
+  <Hero a="Ask the" b="network" seed={41} pre="AI meets GIS" status={PROJECT_STATUS}
+    lead="A custom MCP server so an AI assistant can query, inspect and, in time, trace an ArcGIS Utility Network, answering with structured results." />
+
+  <section class="section" aria-label="Overview">
+    <div class="wrap split2">
+      <p class="lead" data-block>Utility GIS holds answers that take a specialist to reach: which devices sit on a feeder, what lies downstream of
+        a switch, where the topology is still dirty. The Model Context Protocol gives an AI assistant a safe, typed way to ask the network itself.</p>
+      <div>
+        <p class="body" data-block>This is work in progress, and labelled that way below: each capability carries its status, from planned
+          concept to implemented. Nothing on this page describes a production system.</p>
+        <ul class="tiers" aria-label="Status key" data-items="fade">
+          {Object.keys(STATUS).map((k) => <li><Status kind={k} /></li>)}
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <Chapter id="architecture" n={1} of={N} title="How it fits together" sub="From a question to a structured answer" label="Architecture">
+    <Flow id="mcp-flow" steps={MCP} returns label="Architecture from user to AI assistant, MCP client, GIS MCP server, ArcGIS, the Utility Network and back"
+      caption="The request runs left to right; the structured result returns along the same path." />
+  </Chapter>
+
+  <Chapter id="capabilities" n={2} of={N} title="What it does" sub="Capabilities, grouped by status" label="Capabilities">
+    <div class="cap-groups">
+      {groups.map((g, gi) => (
+        <section aria-label={STATUS[g.kind].label}>
+          <div data-block data-delay={gi * 80}><Status kind={g.kind} /></div>
+          <ul class="cap-list" data-items data-delay={gi * 80 + 60}>
+            {g.items.map((c) => <li><h3 class="cap-name">{c.name}</h3><p class="cap-text">{c.text}</p></li>)}
+          </ul>
+        </section>
+      ))}
+    </div>
+  </Chapter>
+
+  <Chapter id="principles" n={3} of={N} title="Guardrails" sub="Design principles for pointing AI at a utility network" label="Guardrails">
+    <ol class="steps" data-items>
+      {PRINCIPLES.map((p, i) => <li><h4><span>{String(i + 1).padStart(2, "0")}</span>{p.name}</h4><p>{p.text}</p></li>)}
+    </ol>
+  </Chapter>
+
+  <Chapter id="related" n={4} of={N} title="Related work" sub="Local language models and GIS" label="Related work">
+    <div class="split2 block feature">
+      <Figure src="/work/gispost-v1" widths={[800, 1280]} w={1280} h={973} sizes="(max-width: 768px) 100vw, 45vw"
+        alt="The gispost billboard from the flight: a 1:250,000 survey sheet of Nanda Devi with its relief raised into 3D." />
+      <div>
+        <h3 class="h3" data-split data-stagger="22">gispost</h3>
+        <p class="body" data-block>A local-LLM pipeline that reads GIS research every morning. It is where running language models
+          against geospatial material started, before pointing them at a utility network.</p>
+        <div class="case-links" data-block data-delay="80">
+          <Status label="Independent project" />
+          <a class="link" href="/#gispost">See it in the flight <span class="arr" aria-hidden="true">→</span></a>
+        </div>
+      </div>
+    </div>
+  </Chapter>
+
+  <nav class="next wrap" aria-label="Next case study">
+    <a href="/work/earth-observation/">
+      <span class="idx" data-split data-stagger="14">Next</span>
+      <span class="next-title" data-split>Earth observation <span class="arr">→</span></span>
+    </a>
+  </nav>
+</Page>

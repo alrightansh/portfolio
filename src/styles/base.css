@@ -1,0 +1,47 @@
+/* Shared by the flight (index.astro) and the reading pages (layouts/Page.astro): fonts, tokens and the
+   masked-reveal primitives that ui.js animates. */
+@font-face { font-family: "Overused Grotesk"; src: url("/fonts/OverusedGrotesk-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Overused Grotesk"; src: url("/fonts/OverusedGrotesk-Medium.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+:root { --bg: #07090f; --fg: #d2e4f2; --dim: #a9b6c4; --accent: #8fd3ff; --pad: 40px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1); --coral: #ff6b57; --gold: #ffd27a; --mint: #9fe3c9; --soft: #bababa;
+  --line: rgba(210, 228, 242, 0.12); }
+* { box-sizing: border-box; }
+a { color: inherit; text-decoration: none; }
+
+/* masked character reveal */
+.wd { display: inline-block; white-space: nowrap; }
+.ch { display: inline-block; overflow: hidden; vertical-align: bottom; line-height: 1.2; }
+.ch > span { display: inline-block; will-change: transform; }
+.swap { display: inline-grid; }
+.swap-layer { grid-area: 1 / 1; white-space: nowrap; }
+/* paragraphs reveal as one masked block (ui.js blockInto, wrapInto) */
+.blk { display: block; overflow: hidden; }
+.blk > span { display: block; will-change: transform; }
+
+/* chrome */
+.caps { font-size: 14px; letter-spacing: 0.02em; text-transform: uppercase; mix-blend-mode: difference; }
+.logo { position: absolute; left: 50%; top: 22px; transform: translateX(-50%); font-size: 21px;
+  letter-spacing: -0.01em; mix-blend-mode: difference; pointer-events: auto; }
+.logo b { font-weight: 500; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* stop / chapter ticks (ui.js makeTicks) */
+#ticks { position: fixed; z-index: 20; bottom: 0; left: 50%; transform: translateX(-50%); display: flex;
+  align-items: flex-end; gap: 4px; height: 80px; }
+.tick { width: 14px; height: 100%; display: flex; align-items: flex-end; justify-content: center;
+  background: none; border: 0; padding: 0; cursor: pointer; }
+.tick i { display: block; width: 1px; height: 0; background: var(--fg); opacity: 0.15; }
+
+/* page change: the accent bar of the loader sweeps across while the page fades (transition.js) */
+#bar { position: fixed; z-index: 95; top: 0; left: 0; width: 100%; height: 4px; background: var(--accent);
+  transform: scaleX(0); transform-origin: 0 50%; pointer-events: none; }
+.leaving body::after { content: ""; position: fixed; inset: 0; z-index: 94; background: var(--bg); pointer-events: none;
+  animation: page-cover 0.36s ease forwards; }
+@keyframes page-cover { from { opacity: 0; } to { opacity: 1; } }
+
+@media (max-width: 768px) {
+  :root { --pad: 20px; --top: calc(20px + env(safe-area-inset-top)); --bottom: calc(28px + env(safe-area-inset-bottom)); }
+  .logo { top: calc(var(--top) - 4px); font-size: 19px; }
+  .caps { font-size: 11px; }
+}
