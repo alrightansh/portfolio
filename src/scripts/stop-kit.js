@@ -108,9 +108,13 @@ void main() {
 // Scales and centres the map so its relief at the given lift fits the free screen area, as seen
 // from the camera's pinned position (the map is pinned relative to the camera while the stop plays).
 // focus (optional): fit only part of the map, { x, y, w, h } in map units (centre and size), with the
-// relief between heights lo and hi (0..1 of the lift) instead of 0..1.
+// relief between heights lo and hi (0..1 of the lift) instead of 0..1. Uses the group's rotation as set.
+// Each call starts from a first guess of its own, never from the group's state, so a bad frame cannot
+// carry over. Returns false if no fit was found (the group's scale and position are then meaningless).
+const FIT_STEPS = 30;        // at most this many refinements a call
+const FIT_TOLERANCE = 1e-6;  // done once the size and the centre are this close (screen units, -1..1)
 export function makeFitter(group, size) {
-  const cam = new THREE.PerspectiveCamera(), p = new THREE.Vector3();
+  const cam = new THREE.PerspectiveCamera(), p = new THREE.Vector3(), mid = new THREE.Vector3();
   return (camera, camShift, z, lift, focus = null) => {
     const f = focus || { x: 0, y: 0, w: size.x, h: size.y, lo: 0, hi: 1 };
     cam.copy(camera);
@@ -118,19 +122,44 @@ export function makeFitter(group, size) {
     cam.updateMatrixWorld(true);
     const box = fitBox();
     const tx = box.x0 + box.x1 - 1, ty = 1 - (box.y0 + box.y1), tw = (box.x1 - box.x0) * 2, th = (box.y1 - box.y0) * 2;
-    group.position.z = z;
-    for (let iter = 0; iter < 6; iter++) {
+    const ky = Math.tan((cam.fov * Math.PI) / 360), kx = ky * cam.aspect, midZ = ((f.lo + f.hi) / 2) * lift;
+    // first guess: the box face on at the pinned depth, filling the free area, its centre on the line
+    // of sight through the free area's centre
+    const depth = cam.position.z - z, s = Math.min((tw * kx * depth) / f.w, (th * ky * depth) / f.h);
+    mid.set(f.x, f.y, midZ).applyEuler(group.rotation).multiplyScalar(s); // the box centre from the group's origin
+    p.set(tx, ty, 0.5).unproject(cam).sub(cam.position);
+    p.multiplyScalar((z + mid.z - cam.position.z) / p.z);
+    group.scale.setScalar(s);
+    group.position.set(cam.position.x + p.x - mid.x, cam.position.y + p.y - mid.y, z);
+    // the box's size against the free area (r: the scale that fits it) and its offset from the free
+    // area's centre, in screen units; null while a corner is behind the camera, where projections mean nothing
+    const bounds = () => {
       group.updateMatrixWorld(true);
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
       for (const sx of [-0.5, 0.5]) for (const sy of [-0.5, 0.5]) for (const h of [f.lo, f.hi]) {
-        p.set(f.x + sx * f.w, f.y + sy * f.h, h * lift).applyMatrix4(group.matrixWorld).project(cam);
+        p.set(f.x + sx * f.w, f.y + sy * f.h, h * lift).applyMatrix4(group.matrixWorld).applyMatrix4(cam.matrixWorldInverse);
+        if (-p.z < cam.near) return null;
+        p.applyMatrix4(cam.projectionMatrix);
         x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
       }
-      group.scale.multiplyScalar(Math.min(tw / (x1 - x0), th / (y1 - y0)));
-      const halfH = cam.position.distanceTo(group.position) * Math.tan((cam.fov * Math.PI) / 360);
-      group.position.x += (tx - (x0 + x1) / 2) * halfH * cam.aspect;
-      group.position.y += (ty - (y0 + y1) / 2) * halfH;
+      return { r: Math.min(tw / (x1 - x0), th / (y1 - y0)), ex: tx - (x0 + x1) / 2, ey: ty - (y0 + y1) / 2 };
+    };
+    for (let i = 0; i < FIT_STEPS; i++) {
+      const b = bounds();
+      // resize about the box centre, so it stays put on screen (halved while a corner is behind the camera)
+      const r = b ? b.r : 0.5;
+      mid.set(f.x, f.y, midZ).applyMatrix4(group.matrixWorld);
+      group.scale.multiplyScalar(r);
+      group.position.x = mid.x + (group.position.x - mid.x) * r;
+      group.position.y = mid.y + (group.position.y - mid.y) * r;
+      if (!b) continue;
+      // then slide it onto the free area's centre, by the screen offset at the box centre's depth
+      const d = -p.copy(mid).applyMatrix4(cam.matrixWorldInverse).z;
+      group.position.x += b.ex * kx * d;
+      group.position.y += b.ey * ky * d;
+      if (Math.abs(r - 1) < FIT_TOLERANCE && Math.abs(b.ex) < FIT_TOLERANCE && Math.abs(b.ey) < FIT_TOLERANCE) break;
     }
+    return bounds() !== null && Number.isFinite(group.scale.x + group.position.x + group.position.y);
   };
 }
 
@@ -237,11 +266,17 @@ export function makeRig(group, size, at, win) {
       win.uFeather.value = zoomed ? hw * FEATHER : 0.05;
       const s0 = group.scale.x;
       prev.copy(group.position);
-      fit(camera, camShift, z, lift, { x: (cx - 0.5) * size.x, y: (0.5 - cy) * size.y, w: size.x / view.z, h: size.y / view.z, lo, hi });
-      const k = fitted ? 1 - Math.exp(-dt * 5) : 1;
-      group.scale.setScalar(s0 + (group.scale.x - s0) * k);
-      group.position.x = prev.x + (group.position.x - prev.x) * k;
-      group.position.y = prev.y + (group.position.y - prev.y) * k;
+      if (!fit(camera, camShift, z, lift, { x: (cx - 0.5) * size.x, y: (0.5 - cy) * size.y, w: size.x / view.z, h: size.y / view.z, lo, hi })) {
+        group.scale.setScalar(s0); // no fit this frame: hold the last one
+        group.position.set(prev.x, prev.y, z);
+        return;
+      }
+      if (fitted) { // ease from the last frame toward the fit; a fresh fit is taken as it is
+        const k = 1 - Math.exp(-dt * 5);
+        group.scale.setScalar(s0 + (group.scale.x - s0) * k);
+        group.position.x = prev.x + (group.position.x - prev.x) * k;
+        group.position.y = prev.y + (group.position.y - prev.y) * k;
+      }
       fitted = true;
     },
     // whether a map uv point is inside the window, short of its faded edge (labels outside are hidden)
