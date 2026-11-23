@@ -90,7 +90,7 @@ const patchCaption = patchLines.length === 1
   ? `The ${word(power.patches.length)} patches, all by the ${kv(patchLines[0]).name} line` : `The ${word(power.patches.length)} patches`;
 const patchHead = ["Patch", "Tree returns", "Nearest a wire", "Across"];
 const patchRows = power.patches.map((p, i) => [String(i + 1), n(p.returns), m(p.nearest), m(p.spread)]);
-const treesAlt = `The 110 kV span over the trees, with the tree returns nearest its wires picked out and labelled ${m(clr.tree)} from a wire.`;
+const treesAlt = `The 110 kV span between its ${n(sum(pylons(110)) / pylons(110).length)} m pylons over trees in green, the tree returns nearest its wires in orange and labelled ${m(clr.tree)} from a wire, and a 380 kV pylon in the foreground.`;
 
 // ---- sewers ----
 const NET = { storm: "Storm drains", foul: "Foul sewers", pressure: "Pressure mains", combined: "Combined sewers", overflow: "Overflow pipes" } as const;
@@ -160,7 +160,7 @@ const depthNote = `Ground to the lowest pipe, in ${n(depth.step * 100)} cm steps
           {pc(share(lineReturns))} of the cloud.</p>
       </div>
       <Figure src="/work/li-classes-v1" w={1600} h={1000} sizes={sizes}
-        alt="The block of Wierden in its laser classes: trees in green, buildings in tan, open ground in grey, and both power lines in yellow with their pylons."
+        alt="The block of Wierden in its laser classes: trees in green, buildings in tan, open ground in grey, a pond, and both power lines in yellow with their white pylons."
         caption="Every return in its class: a still from the stop in the flight." credit={CREDIT} />
     </div>
     <div class="split2 an-row">
