@@ -145,7 +145,7 @@ npm ci
 npx astro dev        # or: npx astro dev --background (see AGENTS.md)
 npm run build        # static output in dist/, then the CSP check
 npx astro preview
-npx wrangler dev     # dist/ as Cloudflare serves it, with public/_headers and public/_redirects
+npx wrangler dev     # builds, then serves dist/ as Cloudflare does (public/_headers, public/_redirects)
 ```
 
 Publishing is a push to `main` (see `DEPLOY.md`).
