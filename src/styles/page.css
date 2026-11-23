@@ -438,7 +438,7 @@ a.row:hover .bar-hint { opacity: 1; width: 42px; background: var(--accent); }
 .an-part + .an-part { margin-top: clamp(88px, 14vh, 160px); }
 .an-part .h3 { margin-top: 12px; }
 .an-head { align-items: center; }
-.an-head.top { align-items: start; } /* text beside a chart whose table view opens below it */
+.an-head.an-start { align-items: start; } /* text beside a chart whose table view opens below it */
 .an-row { margin-top: clamp(44px, 7vh, 72px); align-items: start; }
 .an-table { margin-top: clamp(44px, 7vh, 72px); }
 

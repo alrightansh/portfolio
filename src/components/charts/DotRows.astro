@@ -20,7 +20,7 @@ const placed = rows.map((row) => {
   return { ...row, dots };
 });
 ---
-<div class="dots" role="group" aria-label={label}>
+<div class="dot-plot" role="group" aria-label={label}>
   {placed.map((row) => (
     <div class="dot-row">
       <p class="dot-label">{row.label}{row.sub && <span>{row.sub}</span>}</p>
