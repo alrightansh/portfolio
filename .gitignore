@@ -27,3 +27,6 @@ __pycache__/
 
 # jetbrains setting folder
 .idea/
+
+# wrangler dev state
+.wrangler/

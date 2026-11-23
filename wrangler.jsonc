@@ -1,0 +1,14 @@
+// Cloudflare Workers static assets: serves dist/ on alrightansh.com. Workers Builds deploys every push to main and
+// gives other branches a preview URL. Headers live in public/_headers. See DEPLOY.md.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Must match the Worker's name in the Cloudflare dashboard.
+  "name": "portfolio",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    // Astro builds with trailingSlash "always": /work/ai redirects to /work/ai/, which serves work/ai/index.html.
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  }
+}

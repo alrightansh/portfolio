@@ -3,11 +3,13 @@
 FROM node:22-slim AS build
 WORKDIR /build
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --omit=dev --no-audit --no-fund
 COPY astro.config.mjs tsconfig.json ./
+COPY tools/check-csp.mjs tools/check-csp.mjs
 COPY src src
 COPY public public
-RUN npm run build
+# dist/_headers is for Cloudflare; nginx sends the same headers from security-headers.conf.
+RUN npm run build && rm dist/_headers
 
 FROM nginxinc/nginx-unprivileged:1.29-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf

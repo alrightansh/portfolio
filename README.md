@@ -44,4 +44,4 @@ npx astro dev
 
 ## Deploy
 
-See [DEPLOY.md](DEPLOY.md).
+Cloudflare builds and publishes every push to `main`; other branches get a preview URL. See [DEPLOY.md](DEPLOY.md).

@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "astro build && node tools/check-csp.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },
@@ -17,5 +17,8 @@
   },
   "optionalDependencies": {
     "@astrojs/compiler-binding-wasm32-wasi": "^0.4.1"
+  },
+  "devDependencies": {
+    "wrangler": "^4.166.0"
   }
 }

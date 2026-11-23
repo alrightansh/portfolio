@@ -26,17 +26,22 @@ Deep links into the flight: `/#utility-networks`, `/#toolkit`, `/#remote-sensing
 - Fonts: Overused Grotesk 400/500, self-hosted in `public/fonts/`. Code uses the system monospace stack.
 - Code highlighting: Astro's built-in `<Code>` (Shiki) with a custom theme; tokens become classes at build time
   (`src/scripts/code-theme.js`) because the CSP forbids inline styles.
-- Deploy: Docker (node build, nginx-unprivileged) behind a Cloudflare tunnel. See `DEPLOY.md`.
+- Hosting: Cloudflare Workers static assets (`wrangler.jsonc`). Every push to `main` builds and goes live through
+  Workers Builds; other branches get a preview URL. A failed build leaves the live site as it was. Docker (node build,
+  nginx-unprivileged) stays for local testing and as a fallback host. See `DEPLOY.md`.
+- Headers and redirects exist twice: `public/_headers` and `public/_redirects` for Cloudflare, `security-headers.conf`
+  and `nginx.conf` for Docker. Change both sides together.
 
 ## Hard constraint: Content Security Policy
 
-`security-headers.conf` sends `script-src 'self'; style-src 'self'`. Therefore:
+`public/_headers` (live) and `security-headers.conf` (Docker) send `script-src 'self'; style-src 'self'`. Therefore:
 
 - No inline `<script>` (except `type="application/ld+json"` data blocks with `is:inline`) and no inline `<style>`.
 - No `style="..."` attributes in markup. Set styles from JS through CSSOM (`el.style.x = ...`), which CSP allows.
 - `astro.config.mjs` sets `build.inlineStylesheets: "never"` and `vite.build.assetsInlineLimit: 0` so Astro never
   inlines small CSS or JS. Do not remove these.
 - After a build, `dist/**/*.html` must contain no `<style` and no `<script>` without `src`, apart from JSON-LD.
+  `npm run build` enforces this with `tools/check-csp.mjs` and fails otherwise, which also stops the deploy.
 
 ## Layout of the code
 
@@ -138,6 +143,9 @@ Small text is uppercase 11 to 14 px with `0.02em` tracking; big titles have nega
 ```bash
 npm ci
 npx astro dev        # or: npx astro dev --background (see AGENTS.md)
-npx astro build      # static output in dist/
+npm run build        # static output in dist/, then the CSP check
 npx astro preview
+npx wrangler dev     # dist/ as Cloudflare serves it, with public/_headers and public/_redirects
 ```
+
+Publishing is a push to `main` (see `DEPLOY.md`).
