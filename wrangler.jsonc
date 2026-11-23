@@ -5,6 +5,9 @@
   // Must match the Worker's name in the Cloudflare dashboard.
   "name": "portfolio",
   "compatibility_date": "2026-11-01",
+  // wrangler deploy, versions upload and dev build the site first, so a deploy never depends on the dashboard's
+  // build command (left empty, dist/ would be missing and the deploy would fail).
+  "build": { "command": "npm run build" },
   "assets": {
     "directory": "./dist",
     // Astro builds with trailingSlash "always": /work/ai redirects to /work/ai/, which serves work/ai/index.html.

@@ -5,9 +5,9 @@ about a minute, whether or not the PC is on. The Docker stack further down is fo
 
 ## How it works
 
-- Cloudflare Workers Builds watches `alrightansh/portfolio`. On every push it installs dependencies, runs
-  `npm run build` (Astro, then `tools/check-csp.mjs`) and `npx wrangler deploy`, which uploads `dist/` as set in
-  `wrangler.jsonc`.
+- Cloudflare Workers Builds watches `alrightansh/portfolio`. On every push it installs dependencies and runs
+  `npx wrangler deploy`, which first builds the site (`npm run build`: Astro, then `tools/check-csp.mjs`, as set in
+  `wrangler.jsonc`) and then uploads `dist/`.
 - A failed build deploys nothing, so the last good version stays live. The CSP check fails the build when a page has
   an inline style or script that the CSP would block.
 - Other branches build too and get a preview URL, shown on the commit in GitHub and in the dashboard. Merge to `main`
@@ -22,7 +22,7 @@ about a minute, whether or not the PC is on. The Docker stack further down is fo
 1. Workers & Pages > Create application > Import a repository. Connect GitHub and pick `alrightansh/portfolio`.
 2. Settings:
    - Project name: `portfolio` (must match `name` in `wrangler.jsonc`)
-   - Build command: `npm run build`
+   - Build command: leave it empty (`npx wrangler deploy` builds first; `npm run build` here just builds twice)
    - Deploy command: `npx wrangler deploy`
    - Builds for non-production branches: on, with `npx wrangler versions upload`
 3. Create and deploy. When the build finishes, open the `*.workers.dev` link it shows and check the site.
@@ -42,8 +42,7 @@ Optional: the map data (`*.bin`) is served uncompressed by default. Rules > Comp
 
   ```powershell
   npm ci
-  npm run build
-  npx wrangler dev        # http://localhost:8787
+  npx wrangler dev        # builds, then serves http://localhost:8787
   ```
 
 ## Docker (local test, fallback host)
