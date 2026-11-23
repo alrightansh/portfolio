@@ -1,0 +1,3 @@
+# The research page's old address (nginx.conf has the same 301 for the Docker build).
+/work/earth-observation/ /work/research/ 301
+/work/earth-observation /work/research/ 301

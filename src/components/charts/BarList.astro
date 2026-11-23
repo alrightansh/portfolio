@@ -1,0 +1,27 @@
+---
+// Ranked horizontal bars, one series, each value at its bar's tip. Each bar is an SVG rect sized in percent of its
+// row (no viewBox), so its 4 px rounded end and the text keep their size; the longest bar takes LONGEST % of the
+// row, leaving room for its value. Each row is its hover and focus target (page-charts.js).
+interface Row { label: string; value: number; text: string; tip: { h: string; r: string[][] }; aria: string }
+interface Props { label: string; rows: Row[]; cls: string }
+const { label, rows, cls } = Astro.props;
+const LONGEST = 72, SHORTEST = 0.4, ROUND = 6, ROW = 30, H = 12, R = 4; // percents of the row; then pixels
+const most = Math.max(...rows.map((r) => r.value));
+const y = (ROW - H) / 2;
+const bars = rows.map((r) => {
+  const w = Math.max((r.value / most) * LONGEST, SHORTEST);
+  return { ...r, w: `${Math.round(w * 1000) / 1000}%`, round: w >= ROUND }; // a shorter bar can be under 2 R on a phone
+});
+---
+<ol class="bars" aria-label={label}>
+  {bars.map((b) => (
+    <li class="bar-row hit" aria-label={b.aria} data-tip={JSON.stringify(b.tip)}>
+      <span class="bar-label" aria-hidden="true">{b.label}</span>
+      <svg width="100%" height={ROW} aria-hidden="true">
+        <rect class={`mark ${cls}`} x="0" y={y} width={b.w} height={H} rx={b.round ? R : 0} />
+        {b.round && <rect class={`mark ${cls}`} x="0" y={y} width={R} height={H} />}
+        <text class="val" x={b.w} dx="8" y={ROW / 2 + 4}>{b.text}</text>
+      </svg>
+    </li>
+  ))}
+</ol>

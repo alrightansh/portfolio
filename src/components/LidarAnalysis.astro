@@ -1,0 +1,263 @@
+---
+// The long analysis of Utilities in 3D on the research page, passed into its ProjectCase. Every figure is read from
+// src/data/lidar-stats.json (tools/lidar/analyse_lidar.py, from the same AHN6, GWSW and OpenStreetMap data as the
+// stop in the flight) and worked into the copy here, so text, charts and tables cannot drift apart. Values are
+// prepared up here so the markup below only names them.
+import Figure from "./Figure.astro";
+import ChartFrame from "./charts/ChartFrame.astro";
+import BarList from "./charts/BarList.astro";
+import DotRows from "./charts/DotRows.astro";
+import Columns from "./charts/Columns.astro";
+import DataTable from "./charts/DataTable.astro";
+import S from "../data/lidar-stats.json";
+
+const { survey, power, sewers } = S;
+const n = (v: number, d = 0) => v.toLocaleString("en-GB", { minimumFractionDigits: d, maximumFractionDigits: d });
+const m = (v: number, d = 1) => `${n(v, d)} m`;
+const km = (v: number) => `${n(v, 2)} km`;
+const pc = (v: number) => `${n(v, v >= 1 ? 1 : 2)}%`;
+const word = (v: number) => ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][v] ?? n(v);
+const range = (vs: number[], d = 1, unit = " m") => `${n(Math.min(...vs), d)}–${n(Math.max(...vs), d)}${unit}`; // tables
+const between = (vs: number[], d = 1, unit = " m") => `${n(Math.min(...vs), d)} to ${n(Math.max(...vs), d)}${unit}`; // prose
+const sum = (vs: number[]) => vs.reduce((a, b) => a + b, 0);
+const count = (v: number) => n(v);
+const KV = { 380: { name: "380 kV", cls: "s-yellow" }, 110: { name: "110 kV", cls: "s-blue" } } as const;
+const kv = (v: number) => KV[v as 380 | 110];
+const sizes = "(max-width: 768px) 100vw, 45vw";
+const CREDIT = "Point cloud: AHN6, Het Waterschapshuis. Power lines © OpenStreetMap contributors.";
+
+// ---- the survey ----
+const share = (c: number) => (c / survey.points) * 100;
+const CLASS_NAMES: [keyof typeof survey.classes, string][] = [
+  ["ground", "Ground"], ["tree", "Trees, 2.5 m and up"], ["low", "Other, under 2.5 m"], ["building", "Buildings"],
+  ["wire", "Wires"], ["water", "Water"], ["tower", "Pylons"], ["civil", "Civil structures"],
+];
+const classes = CLASS_NAMES.map(([k, label]) => ({ label, count: survey.classes[k] })).sort((a, b) => b.count - a.count);
+const classRows = classes.map((c) => [c.label, n(c.count), pc(share(c.count))]);
+const classBars = classes.map((c) => ({
+  label: c.label, value: c.count, text: pc(share(c.count)),
+  tip: { h: c.label, r: [[n(c.count), "returns", "s-blue"], [pc(share(c.count)), "of the cloud", ""]] },
+  aria: `${c.label}: ${n(c.count)} returns, ${pc(share(c.count))}`,
+}));
+const classNote = `Share of all ${n(survey.points)} returns.`;
+const lineReturns = survey.classes.wire + survey.classes.tower;
+const flown = new Date(`${survey.scan.dates[0]}T00:00:00Z`)
+  .toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const passes = survey.scan.lines === 1 ? "once" : survey.scan.lines === 2 ? "twice" : `${word(survey.scan.lines)} times`;
+const passNoun = survey.scan.lines === 1 ? "one pass" : `${word(survey.scan.lines)} passes`;
+const seconds = n(survey.scan.minutes * 60);
+
+// ---- the wires ----
+const spans = [...power.spans].sort((a, b) => b.kv - a.kv || b.length - a.length);
+const wiresOf = (k: number, whole = false) => spans.filter((s) => s.kv === k && (!whole || s.full)).flatMap((s) => s.wires);
+const pylons = (k: number) => power.pylons.filter((p) => p.kv === k).map((p) => p.height);
+const lowest = (k: number) => Math.min(...wiresOf(k).map((w) => w.low));
+const spanSags = spans.filter((s) => s.kv === 380 && s.full).sort((a, b) => a.length - b.length)
+  .map((s, i) => `${i ? "; the" : "The"} ${n(s.length)} m span sags ${between(s.wires.map((w) => w.sag))}`).join("");
+const sagKeys = [{ label: KV[380].name, cls: KV[380].cls, dot: true }, { label: KV[110].name, cls: KV[110].cls, dot: true }];
+const sagRows = spans.map((s) => ({
+  label: m(s.length), sub: s.full ? kv(s.kv).name : `${kv(s.kv).name} · ${n(s.over * 100)}% in the block`,
+  dots: s.wires.map((w) => ({
+    v: w.sag, cls: kv(s.kv).cls,
+    tip: { h: `${m(s.length)} span, ${kv(s.kv).name}`,
+      r: [[m(w.sag, 2), "sag", kv(s.kv).cls], [m(w.low), "lowest above the ground", ""], [n(w.hits), "returns fitted", ""]] },
+    aria: `${kv(s.kv).name}, ${m(s.length)} span: sag ${m(w.sag, 2)}, lowest ${m(w.low)} above the ground`,
+  })),
+}));
+const wireHead = ["Span", "Line", "Sag", "Lowest above ground", "Span² ÷ 8 sag", "Returns"];
+const wireRows = spans.flatMap((s) => s.wires.map((w) => [m(s.length), kv(s.kv).name, m(w.sag, 2), m(w.low), m(w.c, 0), n(w.hits)]));
+const spanHead = ["Span", "Line", "In the block", "Wires", "Sag", "Lowest above ground", "Span² ÷ 8 sag"];
+const spanRows = spans.map((s) => [m(s.length), kv(s.kv).name, s.full ? "All" : `${n(s.over * 100)}%`, s.wires.length,
+  range(s.wires.map((w) => w.sag), 2), range(s.wires.map((w) => w.low)), range(s.wires.map((w) => w.c), 0)]);
+const spanCaption = `The ${word(spans.length)} spans`;
+
+// ---- trees by the wires: both lines together, the first 5 m ----
+const clr = power.clearance;
+const STEP = clr.hist.step, BINS = Math.round(5 / STEP);
+const near110 = clr.hist.kv["110"].slice(0, BINS), near380 = clr.hist.kv["380"].slice(0, BINS);
+const nearAll = near110.map((v, i) => v + near380[i]);
+const binName = (i: number) => `${n(i * STEP, 1)}–${n((i + 1) * STEP, 1)} m`;
+const nearCats = nearAll.map((_, i) => binName(i));
+const nearSeries = [{ name: "tree returns", cls: "s-blue", values: nearAll }];
+const nearTicks = [0, 1, 2, 3, 4, 5].map((v) => ({ at: v / 5, label: v === 5 ? "5 m" : String(v) }));
+const nearHead = ["Distance", "Tree returns", "110 kV", "380 kV"];
+const nearRows = nearAll.map((v, i) => [binName(i), n(v), n(near110[i]), n(near380[i])]);
+const nearNote = `Distance to the nearest wire in ${n(STEP * 100)} cm steps, both lines together.`;
+const clearFrom = nearAll.findIndex((v) => v > 0) * STEP;
+const inPatches = sum(power.patches.map((p) => p.returns));
+const patchLines = [...new Set(power.patches.map((p) => p.kv))];
+const patchCaption = patchLines.length === 1
+  ? `The ${word(power.patches.length)} patches, all by the ${kv(patchLines[0]).name} line` : `The ${word(power.patches.length)} patches`;
+const patchHead = ["Patch", "Tree returns", "Nearest a wire", "Across"];
+const patchRows = power.patches.map((p, i) => [String(i + 1), n(p.returns), m(p.nearest), m(p.spread)]);
+const treesAlt = `The 110 kV span over the trees, with the tree returns nearest its wires picked out and labelled ${m(clr.tree)} from a wire.`;
+
+// ---- sewers ----
+const NET = { storm: "Storm drains", foul: "Foul sewers", pressure: "Pressure mains", combined: "Combined sewers", overflow: "Overflow pipes" } as const;
+type Net = keyof typeof NET;
+const OTHER = "Combined and overflow";
+const years = sewers.years.km;
+const yearOf = (i: number) => sewers.years.from + i * sewers.years.step;
+const YEARS = years.storm.map((_, i) => yearOf(i));
+const other = years.combined.map((v, i) => Math.round((v + years.overflow[i]) * 100) / 100);
+const yearTotal = YEARS.map((_, i) => years.storm[i] + years.foul[i] + years.pressure[i] + other[i]);
+const busiest = YEARS.map((y, i) => ({ y, t: yearTotal[i] })).sort((a, b) => b.t - a.t).map((b) => b.y);
+const both = (ys: number[]) => [...ys].sort((a, b) => a - b).join(" and ");
+const kmText = (v: number) => (v < 1 ? `${n(v * 1000)} m` : `${n(v, 1)} km`);
+const combinedSince = yearOf(years.combined.findIndex((v) => v > 0));
+const totalKm = sum(Object.values(sewers.km));
+const concrete = n((sewers.material.Beton / totalKm) * 100);
+const egg = n((sewers.shape.Eivormig / totalKm) * 100);
+const mainSize = (k: Net) => n(Number(Object.entries(sewers.width[k]).sort((a, b) => b[1] - a[1])[0][0]));
+const laid = (k: Net) => {
+  const ys = YEARS.filter((_, i) => years[k][i] > 0);
+  return ys.length ? (ys[0] === ys[ys.length - 1] ? String(ys[0]) : `${ys[0]}–${ys[ys.length - 1]}`) : "Unknown";
+};
+const nets = (Object.keys(NET) as Net[]).sort((a, b) => sewers.km[b] - sewers.km[a]);
+const netHead = ["Network", "Length", "Pipes", "Main size", "Laid"];
+const netRows = nets.map((k) => [NET[k], km(sewers.km[k]), n(sewers.pipes[k]), `${mainSize(k)} mm`, laid(k)]);
+const pump = sewers.pumps[0];
+const weirs = sewers.overflows;
+const sewersAlt = `The sewer network beneath the block, each kind of pipe in its own colour, with pumping station ${pump.name} labelled.`;
+const yearTitle = `Sewer laid each year, ${YEARS[0]} to ${YEARS[YEARS.length - 1]}`;
+const yearKeys = [{ label: NET.storm, cls: "s-blue" }, { label: NET.foul, cls: "s-orange" }, { label: NET.pressure, cls: "s-aqua" },
+  { label: OTHER, cls: "s-gray" }];
+const yearSeries = [ // bottom up
+  { name: OTHER, cls: "s-gray", values: other },
+  { name: NET.storm, cls: "s-blue", values: years.storm },
+  { name: NET.foul, cls: "s-orange", values: years.foul },
+  { name: NET.pressure, cls: "s-aqua", values: years.pressure },
+];
+const yearCats = YEARS.map(String);
+const yearTicks = [1990, 1995, 2000, 2005].map((y) => ({ at: (YEARS.indexOf(y) + 0.5) / YEARS.length, label: String(y) }));
+const kmTick = (v: number) => `${v} km`;
+const kmOrDash = (v: number) => (v ? km(v) : "–");
+const yearHead = ["Year", NET.storm, NET.foul, NET.pressure, OTHER, "Total"];
+const yearRows = YEARS.flatMap((y, i) => (yearTotal[i] > 0
+  ? [[String(y), ...[years.storm[i], years.foul[i], years.pressure[i], other[i]].map(kmOrDash), km(yearTotal[i])]] : []));
+const depth = sewers.depth;
+const DEPTH_TOP = depth.count.length * depth.step;
+const depthName = (i: number) => `${n(i * depth.step, 2)}–${n((i + 1) * depth.step, 2)} m`;
+const depthCats = depth.count.map((_, i) => depthName(i));
+const depthSeries = [{ name: "manholes", cls: "s-blue", values: depth.count }];
+const depthTicks = [0, 1, 2, 3].map((v) => ({ at: v / DEPTH_TOP, label: v === 3 ? "3 m" : String(v) }));
+const depthMarker = { at: depth.median / DEPTH_TOP, label: `Median ${m(depth.median, 2)}` };
+const depthRows = depth.count.flatMap((v, i) => (v ? [[depthName(i), n(v)]] : []));
+const depthNote = `Ground to the lowest pipe, in ${n(depth.step * 100)} cm steps.`;
+---
+<div class="analysis">
+  <section class="an-part" aria-labelledby="li-survey">
+    <div class="split2 an-head">
+      <div>
+        <p class="kicker" data-split data-stagger="14">Point cloud</p>
+        <h3 class="h3" id="li-survey" data-split data-stagger="22">{n(survey.points / 1e6)} million returns</h3>
+        <p class="body" data-block>AHN6 flew over the block {passes} on {flown}: {seconds} seconds of scanning that left
+          {n(survey.density, 1)} returns on every square metre. AHN classes each return; here, unclassified returns 2.5 m or more above the
+          terrain count as trees.</p>
+        <p class="body" data-block>Nearly half the cloud is ground ({pc(share(survey.classes.ground))}) and a third is trees
+          ({pc(share(survey.classes.tree))}). Half the tree returns stand higher than {m(survey.treeHeight.p50)}, a tenth higher than
+          {m(survey.treeHeight.p90)}. The power lines are thin: wires and pylons together come to {n(lineReturns)} returns,
+          {pc(share(lineReturns))} of the cloud.</p>
+      </div>
+      <Figure src="/work/li-classes-v1" w={1600} h={1000} sizes={sizes}
+        alt="The block of Wierden in its laser classes: trees in green, buildings in tan, open ground in grey, and both power lines in yellow with their pylons."
+        caption="Every return in its class: a still from the stop in the flight." credit={CREDIT} />
+    </div>
+    <div class="split2 an-row">
+      <ChartFrame title="Returns by class" note={classNote} head={["Class", "Returns", "Share"]} rows={classRows} num={[1, 2]}>
+        <BarList label="Returns by class" cls="s-blue" rows={classBars} />
+      </ChartFrame>
+      <dl class="facts" data-items="fade">
+        <div><dt>Flown</dt><dd>{flown}, {passNoun}, {seconds} seconds of scanning</dd></div>
+        <div><dt>Area</dt><dd>1,000 × 750 m, {n(survey.areaKm2, 2)} km²</dd></div>
+        <div><dt>Returns</dt><dd>{n(survey.points)}, {n(survey.density, 1)} a square metre</dd></div>
+        <div><dt>Trees</dt><dd>Half taller than {m(survey.treeHeight.p50)}, a tenth taller than {m(survey.treeHeight.p90)}</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="an-part" aria-labelledby="li-wires">
+    <div class="split2 an-head top">
+      <div>
+        <p class="kicker" data-split data-stagger="14">Power lines</p>
+        <h3 class="h3" id="li-wires" data-split data-stagger="22">{power.wires} wires, each a parabola</h3>
+        <p class="body" data-block>Each wire is one hanging parabola fitted through its own returns, span by span between the pylons. Of the
+          {n(power.fit.returns)} wire returns away from the pylons, {pc(power.fit.within25cm)} lie within 25 cm of their fitted wire and
+          {pc(power.fit.within50cm)} within 50 cm.</p>
+        <p class="body" data-block>The 380 kV pylons stand {between(pylons(380))} tall, the 110 kV pylons {between(pylons(110))}.
+          {spanSags}. Span² ÷ (8 × sag) is a wire's horizontal tension over its weight a metre:
+          {between(wiresOf(380, true).map((w) => w.c), 0)} on the whole 380 kV spans against {between(wiresOf(110, true).map((w) => w.c), 0)}
+          on the whole 110 kV span, so the bigger line is strung tighter for its weight. The lowest 110 kV wire passes {m(lowest(110))} above
+          the ground, the lowest 380 kV wire {m(lowest(380))}.</p>
+      </div>
+      <ChartFrame title="Sag of every wire, span by span" note="One dot a wire. A span only partly in the block is fitted on the part inside it."
+        keys={sagKeys} head={wireHead} rows={wireRows} num={[2, 3, 4, 5]}>
+        <DotRows label="Sag of every wire, span by span" rows={sagRows} x0={5} x1={13} ticks={[5, 7, 9, 11, 13]} unit="m" />
+      </ChartFrame>
+    </div>
+    <div class="an-table" data-block>
+      <DataTable caption={spanCaption} head={spanHead} rows={spanRows} num={[3, 4, 5, 6]} />
+    </div>
+  </section>
+
+  <section class="an-part" aria-labelledby="li-trees">
+    <div class="split2 an-head">
+      <Figure src="/work/li-trees-v1" w={1600} h={1000} sizes={sizes} alt={treesAlt}
+        caption="Trees under the 110 kV line: a still from the stop in the flight." credit={CREDIT} />
+      <div>
+        <p class="kicker" data-split data-stagger="14">Clearance</p>
+        <h3 class="h3" id="li-trees" data-split data-stagger="22">Trees under the line</h3>
+        <p class="body" data-block>Nothing grows within {m(clearFrom, 0)} of a wire. {n(clr.within5)} tree returns come within 5 m, all but
+          {n(clr.within5ByKv["380"])} under the 110 kV line, and {n(inPatches)} of them sit in {word(power.patches.length)} patches.</p>
+        <p class="body" data-block>The flight gives {m(clr.tree)}, setting aside the nearest {clr.strays} returns as strays: insulators,
+          spacers and birds look like twigs to a laser. The very nearest is {m(clr.closest)}. Roofs stay at least {m(clr.building)} clear.
+          The scan is from February, with the leaves down, so the summer canopy comes closer.</p>
+      </div>
+    </div>
+    <div class="split2 an-row">
+      <ChartFrame title="Tree returns near a wire" note={nearNote} head={nearHead} rows={nearRows} num={[1, 2, 3]}>
+        <Columns label="Tree returns by distance to the nearest wire" cats={nearCats} series={nearSeries} max={2500}
+          yTicks={[500, 1000, 1500, 2000, 2500]} fmt={count} xTicks={nearTicks} fill={0.4} />
+      </ChartFrame>
+      <div data-block>
+        <DataTable caption={patchCaption} head={patchHead} rows={patchRows} num={[1, 2, 3]} />
+      </div>
+    </div>
+  </section>
+
+  <section class="an-part" aria-labelledby="li-sewers">
+    <div class="split2 an-head">
+      <div>
+        <p class="kicker" data-split data-stagger="14">Sewers</p>
+        <h3 class="h3" id="li-sewers" data-split data-stagger="22">Under the street</h3>
+        <p class="body" data-block>A separated system: {kmText(sewers.km.foul)} of foul sewer and {kmText(sewers.km.storm)} of storm drain
+          run side by side, with {kmText(sewers.km.combined)} of combined sewer left from {combinedSince}. Most of it was laid in
+          {both(busiest.slice(0, 2))}, more in {both(busiest.slice(2, 4))}; the median year is {sewers.years.median}.</p>
+        <p class="body" data-block>The land is flat, so the pipes barely fall: half the gravity length drops less than
+          {m(sewers.gradient.median, 2)} a kilometre, {n(sewers.gradient.under1)}% less than 1 m. Pumps do the lifting. All the foul water
+          reaches pumping station {pump.name}, {n(pump.m3h, 1)} m³ an hour, and {word(weirs.length)} overflow chambers spill storm surges
+          over weirs {between(weirs, 2)} above NAP.</p>
+        <p class="body" data-block>Concrete makes up {concrete}% of the length, PE and PVC the rest; {egg}% is egg-shaped, narrow at the
+          bottom so low flows stay fast. Most foul sewers are {mainSize("foul")} mm, most storm drains {mainSize("storm")} mm.
+          {n(depth.manholes)} manholes, {m(depth.median, 2)} deep at the median and {m(depth.max)} at the deepest.</p>
+      </div>
+      <Figure src="/work/li-sewers-v1" w={1600} h={1000} sizes={sizes} alt={sewersAlt}
+        caption="The sewers below the street: a still from the stop in the flight."
+        credit="Sewers and pumping stations: GWSW via PDOK (CC0). Point cloud: AHN6, Het Waterschapshuis." />
+    </div>
+    <div class="split2 an-row">
+      <ChartFrame title={yearTitle} note="Kilometres of pipe by the year it was laid." keys={yearKeys} head={yearHead} rows={yearRows}
+        num={[1, 2, 3, 4, 5]}>
+        <Columns label="Sewer laid each year by kind" cats={yearCats} series={yearSeries} max={6} yTicks={[2, 4, 6]} yFmt={kmTick}
+          fmt={kmOrDash} xTicks={yearTicks} fill={0.7} />
+      </ChartFrame>
+      <ChartFrame title="Manholes by depth" note={depthNote} head={["Depth", "Manholes"]} rows={depthRows} num={[1]}>
+        <Columns label="Manholes by depth" cats={depthCats} series={depthSeries} max={80} yTicks={[20, 40, 60, 80]} fmt={count}
+          xTicks={depthTicks} marker={depthMarker} fill={0.5} />
+      </ChartFrame>
+    </div>
+    <div class="an-table" data-block>
+      <DataTable caption="The network" head={netHead} rows={netRows} num={[1, 2]} />
+    </div>
+  </section>
+</div>

@@ -17,7 +17,7 @@ export const STATIONS = [
   {
     id: "remote-sensing", glyph: "AI", title: "Remote sensing", sup: "(ISRO)",
     caption: "Reading the planet from orbit. I build machine learning models on satellite imagery for land use and land cover, change detection and terrain analysis, then turn them into decisions: advanced hazard and risk mapping, urban risk management and master plan formulation. ISRO–IIRS advanced certifications.",
-    href: "/work/earth-observation/", linkText: "Read the research →",
+    href: "/work/research/", linkText: "Read the research →",
   },
   // Research stop: rendered by research.js with its own HUD instead of a label.
   { id: "neugal", research: true, title: "Neugal watershed" },

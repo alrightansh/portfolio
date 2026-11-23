@@ -15,9 +15,13 @@ npx astro dev
 ## Layout
 
 - `src/pages/index.astro`: page, HUD markup and styles
-- `src/scripts/`: scene, stations, the three map stops (research.js, energy.js, himachal.js; shared camera rig, lighting
-  and helpers in stop-kit.js), UI and audio
+- `src/scripts/`: scene, stations, the four map stops (lidar.js, research.js, energy.js, himachal.js; shared camera
+  rig, lighting and helpers in stop-kit.js), UI and audio
 - `src/scripts/content.js`: all portfolio copy
+- `public/lidar/`: the Utilities in 3D stop (`li-*-v1.*`), a block of Wierden from AHN6 airborne LiDAR (Het
+  Waterschapshuis), the municipality's GWSW sewers via PDOK (CC0) and OpenStreetMap power lines (ODbL). Rebuild with
+  `python -I tools/lidar/build_lidar.py <cache_dir>`; `python -I tools/lidar/analyse_lidar.py <cache_dir>` works the
+  research page's figures (`src/data/lidar-stats.json`) out of the same cache.
 - `public/research/`: Neugal watershed data
   - `neugal-dem.bin`: SRTM-based DEM, D8 drainage and the RUSLE layers extracted from the dissertation maps.
     Rebuild with `python -I tools/research/build_dem.py` (needs numpy and Pillow; tiles are cached in `tools/research/.cache/`).

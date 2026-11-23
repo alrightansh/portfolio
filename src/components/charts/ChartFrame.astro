@@ -1,0 +1,24 @@
+---
+// What every chart on the reading pages shares: a title and note, a legend when there are two or more series, the
+// chart itself (the slot) and its table view, so no value can be read only by hovering (page-charts.js).
+import DataTable from "./DataTable.astro";
+interface Key { label: string; cls: string; dot?: boolean }
+interface Props { title: string; note?: string; keys?: Key[]; head: string[]; rows: (string | number)[][]; num?: number[] }
+const { title, note, keys = [], head, rows, num } = Astro.props;
+---
+<figure class="chart" data-items="fade">
+  <figcaption class="chart-head">
+    <span class="chart-title">{title}</span>
+    {note && <span class="chart-note">{note}</span>}
+  </figcaption>
+  {keys.length > 1 && (
+    <ul class="chart-keys">
+      {keys.map((k) => <li><span class:list={["chart-key", k.cls, { dot: k.dot }]} aria-hidden="true"></span>{k.label}</li>)}
+    </ul>
+  )}
+  <div class="chart-plot"><slot /></div>
+  <details class="chart-table">
+    <summary>Table view</summary>
+    <DataTable head={head} rows={rows} num={num} />
+  </details>
+</figure>

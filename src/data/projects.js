@@ -1,9 +1,33 @@
-// Earth observation case studies. Every number comes from the flight's map-stop copy (src/scripts/research.js,
-// energy.js, himachal.js) or the north-india-renewables README. `fly` deep-links to the stop in the 3D flight.
+// Research case studies, in the order of the flight's map stops. Every number comes from the stops' copy
+// (src/scripts/lidar.js, research.js, energy.js, himachal.js), src/data/lidar-stats.json (tools/lidar/analyse_lidar.py)
+// or the north-india-renewables README. `fly` deep-links to the stop in the 3D flight.
 export const PROJECTS = [
   {
+    id: "utilities-in-3d", kind: "Independent project",
+    title: "Utilities in 3D", sub: "Power lines, trees and sewers from airborne LiDAR", place: "Wierden, the Netherlands",
+    fly: "/#utilities-in-3d",
+    img: { src: "/work/li-wires-v1", w: 1600, h: 1000, alt: "The 380 kV line over a block of Wierden in 3D: its fitted wires hang between pylons 47 m and 43 m tall above the grey point cloud of houses and trees, the deepest sagging 11.5 m.",
+      caption: "The 380 kV line's 414 m span, its wires fitted through their laser returns: a still from the stop in the flight.",
+      credit: "Point cloud: AHN6, Het Waterschapshuis. Power lines © OpenStreetMap contributors." },
+    stats: [
+      { num: "22.1", unit: "million laser returns over 0.75 km²" },
+      { num: "2.6", unit: "m from a 110 kV wire to the trees beneath it" },
+      { num: "12.7", unit: "km of sewer mapped beneath the block" },
+    ],
+    facts: [
+      ["Problem", "How close do trees grow to the power lines over a Dutch residential block, and how does the sewer network beneath it run?"],
+      ["Scope", "0.75 km² of Wierden in Overijssel, the Netherlands, crossed by a 380 kV and a 110 kV line."],
+      ["Data", "AHN6 airborne LiDAR from 9 February 2025, the municipality's GWSW sewer data and the water boards' pumping stations via PDOK, and OpenStreetMap power lines."],
+      ["Method", "AHN's classes, with unclassified returns 2.5 m or more above the terrain taken as trees. One hanging parabola fitted to each wire along each span, then the distance from every tree and roof return to the nearest wire, leaving out 25 m round each pylon. Sewers placed at their recorded levels and turned to run the way the water flows."],
+      ["Results", "42 wires, with 61.5% of the wire returns within 25 cm of a fitted wire. 4,682 tree returns within 5 m of a wire, nearly all under the 110 kV line, the nearest 2.2 m away. 12.7 km of sewer with 292 manholes, all its foul water draining to one pumping station."],
+      ["Limits", "A February scan, with the leaves down, so the summer canopy comes closer. Sag changes with temperature and load, so the fit holds for the day of the scan. Pressure mains carry no levels, so they are placed 1.2 m down."],
+      ["Use", "Vegetation management along the lines, clearance checks, and planning digs around buried pipes."],
+      ["Tools", "AHN6 LiDAR · Python (laspy, numpy, scipy, pyproj) · GWSW · OpenStreetMap · three.js"],
+    ],
+  },
+  {
     id: "neugal", kind: "Research · Dissertation",
-    title: "Neugal watershed", sub: "Soil erosion risk with RUSLE, AHP and GIS",
+    title: "Neugal watershed", sub: "Soil erosion risk with RUSLE, AHP and GIS", place: "Palampur, Himachal Pradesh",
     fly: "/#neugal",
     img: { src: "/work/neugal-risk-v1", w: 1600, h: 1000, alt: "The Neugal watershed in 3D, coloured by soil erosion risk from low to critical, with streams and the watershed edge." ,
       caption: "Soil loss from low (deep blue) to critical (coral), with soil moving down the streams: a still from the 3D stop in the flight.",
@@ -49,7 +73,7 @@ export const PROJECTS = [
   },
   {
     id: "himachal", kind: "Independent project",
-    title: "Himachal from orbit", sub: "Forests, snow, floods and landslides from satellite data",
+    title: "Himachal from orbit", sub: "Forests, snow, floods and landslides from satellite data", place: "Himachal Pradesh",
     fly: "/#himachal-from-orbit",
     img: { src: "/work/hp-sentinel2-v1", w: 1600, h: 1066, alt: "Sentinel-2 natural colour image of Himachal Pradesh: snow on the high Himalaya in the north-east, forested ranges and valleys, and the plains to the south-west.",
       caption: "Sentinel-2 imagery of Himachal Pradesh, 9 November 2025.",
@@ -79,6 +103,8 @@ export const ALSO = [
 
 // Datasets and the projects that used them (only associations the project material supports).
 export const DATASETS = [
+  ["AHN6", "Utilities in 3D"],
+  ["GWSW (PDOK)", "Utilities in 3D"],
   ["SRTM", "Neugal · Sun and wind"],
   ["Copernicus Sentinel-2", "Neugal · Himachal"],
   ["Copernicus Sentinel-1", "Himachal"],
@@ -88,5 +114,5 @@ export const DATASETS = [
   ["CHIRPS", "Himachal"],
   ["Global Solar Atlas", "Sun and wind"],
   ["Global Wind Atlas", "Sun and wind"],
-  ["OpenStreetMap", "All three"],
+  ["OpenStreetMap", "All four"],
 ];

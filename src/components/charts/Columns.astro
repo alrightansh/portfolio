@@ -1,0 +1,63 @@
+---
+// Columns from one baseline, stacked bottom up, drawn at build time. The SVG has no viewBox: positions along the axis
+// are percentages of its width and heights are CSS pixels, so the text keeps its size at any width and every column
+// keeps its 4 px rounded top. Stacked segments sit 2 px apart. Each column's band is its hover and focus target
+// (page-charts.js), and its readout lists every series.
+interface Series { name: string; cls: string; values: number[] }
+interface Tick { at: number; label: string } // at: 0 to 1 along the axis
+interface Props {
+  label: string;                // accessible name
+  cats: string[];               // one a column: the readout's heading
+  series: Series[];             // bottom up
+  max: number;                  // top of the value axis
+  yTicks: number[];
+  fmt: (v: number) => string;   // readout values
+  yFmt?: (v: number) => string;
+  xTicks: Tick[];
+  marker?: { at: number; label: string };
+  fill?: number;                // a column's share of its band; the rest is air, so columns stay thin
+}
+const { label, cats, series, max, yTicks, fmt, yFmt = (v: number) => v.toLocaleString("en-GB"), xTicks, marker, fill = 0.6 } = Astro.props;
+const T = 16, H = 200, AXIS = 28, GAP = 1, R = 4; // top margin for the top tick's label, plot, axis band, half gap, radius
+const r2 = (v: number) => Math.round(v * 100) / 100;
+const pct = (v: number) => `${r2(v)}%`;
+const y = (v: number) => r2(T + H - (v / max) * H);
+const band = 100 / cats.length;
+const anchor = (at: number) => (at <= 0 ? "start" : at >= 1 ? "end" : "middle");
+const cap = (h: number) => Math.min(R, h / 2); // height of a column's rounded top; below it the column is square
+
+const columns = cats.map((cat, i) => {
+  const parts = series.filter((s) => s.values[i] > 0);
+  let total = 0;
+  const segs = parts.map((s, k) => {
+    const bottom = y(total) - (k > 0 ? GAP : 0);
+    total += s.values[i];
+    const top = y(total) + (k < parts.length - 1 ? GAP : 0);
+    return { cls: s.cls, top, h: r2(bottom - top), end: k === parts.length - 1 };
+  }).filter((s) => s.h > 0.5);
+  return {
+    x: pct(i * band + (band * (1 - fill)) / 2), w: pct(band * fill), hx: pct(i * band), hw: pct(band), segs,
+    tip: JSON.stringify({ h: cat, r: series.map((s) => [fmt(s.values[i]), s.name, s.cls]) }),
+    aria: `${cat}: ${series.map((s) => `${s.name} ${fmt(s.values[i])}`).join(", ")}`,
+  };
+});
+---
+<svg class="cols" width="100%" height={T + H + AXIS} role="group" aria-label={label}>
+  <g aria-hidden="true">
+    {yTicks.map((v) => [
+      <line class="grid" x1="0" x2="100%" y1={y(v)} y2={y(v)} />,
+      <text x="0" y={y(v) - 6}>{yFmt(v)}</text>,
+    ])}
+    {columns.map((c) => c.segs.map((s) => (s.end ? [
+      <rect class={`mark ${s.cls}`} x={c.x} y={s.top} width={c.w} height={s.h} rx={R} />,
+      <rect class={`mark ${s.cls}`} x={c.x} y={r2(s.top + cap(s.h))} width={c.w} height={r2(s.h - cap(s.h))} />,
+    ] : <rect class={`mark ${s.cls}`} x={c.x} y={s.top} width={c.w} height={s.h} />)))}
+    <line class="base" x1="0" x2="100%" y1={T + H} y2={T + H} />
+    {marker && [
+      <line class="marker" x1={pct(marker.at * 100)} x2={pct(marker.at * 100)} y1={T} y2={T + H} />,
+      <text class="marker-label" x={pct(marker.at * 100)} dx="6" y={T - 6}>{marker.label}</text>,
+    ]}
+    {xTicks.map((t) => <text x={pct(t.at * 100)} y={T + H + 18} text-anchor={anchor(t.at)}>{t.label}</text>)}
+  </g>
+  {columns.map((c) => <rect class="hit" x={c.hx} y={T} width={c.hw} height={H} role="img" aria-label={c.aria} data-tip={c.tip} />)}
+</svg>

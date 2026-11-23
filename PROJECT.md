@@ -4,8 +4,9 @@ Working notes for anyone (human or agent) changing this site. Read this first.
 
 ## What the site is
 
-- `/`: **the flight**. A scroll-driven three.js flight over a particle terrain with three real-data map stops
-  (Neugal watershed, North India sun and wind, Himachal from orbit). This is the site's identity; change it with care.
+- `/`: **the flight**. A scroll-driven three.js flight over a particle terrain with four real-data map stops
+  (Utilities in 3D over Wierden, Neugal watershed, North India sun and wind, Himachal from orbit), each linking to
+  its section of `/work/research/`. This is the site's identity; change it with care.
 - `/work/` and its case studies: **reading pages** for recruiters and engineers. Normal document scroll, same type,
   colour and motion as the flight. Added in the Enterprise GIS upgrade (see below).
 
@@ -15,9 +16,9 @@ Working notes for anyone (human or agent) changing this site. Read this first.
 | `/work/` | Overview: positioning, focus areas, experience, skills matrix, contact |
 | `/work/utility-network/` | Case study: Smallworld to Esri, ArcGIS Utility Network, network data, PostGIS, FME, Python, Power BI |
 | `/work/ai/` | AI meets GIS: MCP server architecture with status labels |
-| `/work/earth-observation/` | Research and Earth observation projects, linked to their stops in the flight |
+| `/work/research/` | The four research projects in flight order, each linked to its stop in the flight; Utilities in 3D carries its full analysis (charts from `src/data/lidar-stats.json`). The old `/work/earth-observation/` redirects here (301 in `public/_redirects` and `nginx.conf`) |
 
-Deep links into the flight: `/#utility-networks`, `/#toolkit`, `/#remote-sensing`, `/#neugal`, `/#sun-and-wind`,
+Deep links into the flight: `/#utility-networks`, `/#utilities-in-3d`, `/#toolkit`, `/#remote-sensing`, `/#neugal`, `/#sun-and-wind`,
 `/#himachal`, `/#himachal-from-orbit`, `/#gispost`, `/#paper-peaks`, `/#makemedizzy` (ids live in `src/scripts/content.js`).
 
 ## Stack
@@ -50,9 +51,11 @@ src/pages/index.astro            flight page (HUD markup + styles)
 src/pages/work/*.astro           reading pages
 src/layouts/Page.astro           shared head (meta, OG, JSON-LD), chrome, menu, contact outro, ticks
 src/components/*.astro           Hero, Contours, Chapter, Flow, NetworkDiagram, Equation, CodeTabs, CodeBlock,
-                                 Compare, SkillsMatrix, Status, Figure, ProjectCase, Cta
+                                 Compare, SkillsMatrix, Status, Figure, ProjectCase, Cta, LidarAnalysis
+src/components/charts/*.astro    build-time SVG charts (Columns, BarList, DotRows) in a ChartFrame with a DataTable view
 src/data/site.js                 person, links, nav, status vocabulary
 src/data/{flows,skills,ai,projects,code}.js   structured copy for the reading pages
+src/data/lidar-stats.json        Utilities in 3D figures (tools/lidar/analyse_lidar.py); LidarAnalysis.astro reads them
 src/styles/base.css              tokens, @font-face, reveal primitives, ticks, page-change bar (both page types)
 src/styles/page.css              reading-page styles
 src/scripts/main.js              flight orchestration (boot, virtual scroll, stops, deep links)
@@ -64,6 +67,7 @@ src/scripts/page-chrome.js       top bar, menu, hero drift, chapter ticks, magne
 src/scripts/page-flow.js         pipelines: rail draw-in, pulse, stage HUD, scroll-pinned mode
 src/scripts/page-network.js      Utility Network schematic: energise-in, legend isolation, subnetwork trace
 src/scripts/page-widgets.js      code tabs, equation highlight
+src/scripts/page-charts.js       chart readouts on hover, tap and keyboard (every value is also in the table view)
 src/scripts/contours.js          build-time contour field (noise + marching squares) for hero backgrounds
 src/scripts/code-theme.js        build-time Shiki theme + style-to-class transformer (CSP)
 src/scripts/content.js           flight copy (stations, with deep-link ids and links to the work pages)

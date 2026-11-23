@@ -2,37 +2,57 @@
 import Page from "../../layouts/Page.astro";
 import Hero from "../../components/Hero.astro";
 import ProjectCase from "../../components/ProjectCase.astro";
+import LidarAnalysis from "../../components/LidarAnalysis.astro";
 import Figure from "../../components/Figure.astro";
 import { PROJECTS, ALSO, DATASETS } from "../../data/projects.js";
 import { PERSON } from "../../data/site.js";
 
-const title = "Geospatial Data Science and Earth Observation · Anshuman Choudhary";
-const description = "Remote sensing and spatial modelling by Anshuman Choudhary: RUSLE soil erosion in the Neugal watershed, solar and wind hotspots across North India, and forests, snow, floods and landslides in Himachal Pradesh.";
+const title = "Research · Anshuman Choudhary";
+const description = "Research by Anshuman Choudhary: power lines, trees and sewers from airborne LiDAR in Wierden, soil erosion in the Neugal watershed, solar and wind hotspots across North India, and forests, snow, floods and landslides in Himachal Pradesh.";
 const jsonLd = {
-  "@context": "https://schema.org", "@type": "CollectionPage", name: "Geospatial data science and Earth observation", description,
+  "@context": "https://schema.org", "@type": "CollectionPage", name: "Research", description,
   author: { "@type": "Person", name: PERSON.name, url: "https://alrightansh.com/" },
-  hasPart: PROJECTS.map((p) => ({ "@type": "CreativeWork", name: `${p.title}: ${p.sub}`, url: `https://alrightansh.com/work/earth-observation/#${p.id}` })),
+  hasPart: PROJECTS.map((p) => ({ "@type": "CreativeWork", name: `${p.title}: ${p.sub}`, url: `https://alrightansh.com/work/research/#${p.id}` })),
 };
+const pad = (v: number) => String(v).padStart(2, "0");
 ---
-<Page title={title} description={description} path="/work/earth-observation/" crumb={{ href: "/work/", label: "Work" }} jsonLd={jsonLd}>
-  <Hero a="Reading" b="the planet" seed={5} pre="Geospatial data science · Earth observation"
-    lead="Machine learning on satellite imagery, terrain analysis and spatial models, turned into decisions about soil, energy and hazards." />
+<Page title={title} description={description} path="/work/research/" crumb={{ href: "/work/", label: "Work" }} jsonLd={jsonLd}>
+  <Hero a="Reading" b="the planet" seed={5} pre="Research work"
+    lead="Laser scans, satellite imagery, terrain analysis and spatial models, turned into decisions about utilities, soil, energy and hazards." />
 
   <section class="section" aria-label="Approach">
     <div class="wrap split2">
       <p class="lead" data-block>I build models on satellite imagery for land use and land cover, change detection and terrain analysis, then
         turn them into decisions: hazard and risk mapping, urban risk management and master plan formulation.</p>
       <div>
-        <p class="body" data-block>Three projects follow, each also a stop in the 3D flight on the home page, where the same data plays out
-          on real terrain. Background: advanced degrees in Geography and Remote Sensing, and ISRO–IIRS advanced certifications.</p>
+        <p class="body" data-block>Four projects follow, in the order of the 3D flight on the home page, where each plays out as a stop on real
+          terrain. Background: advanced degrees in Geography and Remote Sensing, and ISRO–IIRS advanced certifications.</p>
         <ul class="chips" data-items="fade" aria-label="Datasets">
           {DATASETS.map(([name, used]) => <li title={`Used in: ${used}`}>{name}</li>)}
         </ul>
       </div>
     </div>
+    <div class="wrap">
+      <ol class="rows" data-items aria-label="Contents">
+        {PROJECTS.map((p, i) => (
+          <li>
+            <a class="row" href={`#${p.id}`}>
+              <span class="row-idx">{pad(i + 1)}</span>
+              <span class="row-title">{p.title}</span>
+              <p class="row-text">{p.sub}</p>
+              <span class="row-end"><span class="bar-hint" aria-hidden="true"></span></span>
+            </a>
+          </li>
+        ))}
+      </ol>
+    </div>
   </section>
 
-  {PROJECTS.map((p, i) => <ProjectCase p={p} n={i + 1} of={PROJECTS.length} />)}
+  {PROJECTS.map((p, i) => (
+    <ProjectCase p={p} n={i + 1} of={PROJECTS.length}>
+      {p.id === "utilities-in-3d" && <LidarAnalysis />}
+    </ProjectCase>
+  ))}
 
   <section class="section" aria-labelledby="also-title">
     <div class="wrap">

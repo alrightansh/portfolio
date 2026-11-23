@@ -5,6 +5,7 @@ import { initReveals } from "./page-reveal.js";
 import { initFlows } from "./page-flow.js";
 import { initNetworks } from "./page-network.js";
 import { initTabs, initEquations } from "./page-widgets.js";
+import { initCharts } from "./page-charts.js";
 
 initTransitions();
 initChrome();
@@ -12,6 +13,7 @@ initFlows();
 initNetworks();
 initTabs();
 initEquations();
+initCharts();
 // Like the flight, wait (briefly) for the type so letters rise in their own shapes.
 const fonts = document.fonts ? Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 700))]) : Promise.resolve();
 fonts.then(() => initReveals());

@@ -1,0 +1,42 @@
+---
+// A dot plot: one row a group, one dot a value on a shared axis, positioned in percent of the row (no viewBox). A
+// dot within `near` of one already placed moves to a lane just above or below it, so equal values stay visible, and
+// a 2 px ring in the page colour keeps touching dots apart. Each dot's 24 px hit circle is its hover and focus
+// target (page-charts.js).
+interface Dot { v: number; cls: string; tip: { h: string; r: string[][] }; aria: string }
+interface Row { label: string; sub?: string; dots: Dot[] }
+interface Props { label: string; rows: Row[]; x0: number; x1: number; ticks: number[]; unit: string; near?: number }
+const { label, rows, x0, x1, ticks, unit, near = 0.18 } = Astro.props;
+const ROW = 44, MID = 22, LANE = 8, R = 5, HIT = 12;
+const pct = (v: number) => `${Math.round(((v - x0) / (x1 - x0)) * 100000) / 1000}%`;
+const anchor = (i: number) => (i === 0 ? "start" : i === ticks.length - 1 ? "end" : "middle");
+const placed = rows.map((row) => {
+  const lanes: number[][] = [[], [], []]; // middle, above, below
+  const dots = [...row.dots].sort((a, b) => a.v - b.v).map((d) => {
+    const k = Math.max(0, [0, 1, 2].findIndex((j) => lanes[j].every((v) => Math.abs(v - d.v) >= near)));
+    lanes[k].push(d.v);
+    return { ...d, cx: pct(d.v), cy: MID + [0, -LANE, LANE][k] };
+  });
+  return { ...row, dots };
+});
+---
+<div class="dots" role="group" aria-label={label}>
+  {placed.map((row) => (
+    <div class="dot-row">
+      <p class="dot-label">{row.label}{row.sub && <span>{row.sub}</span>}</p>
+      <svg width="100%" height={ROW}>
+        <g aria-hidden="true">
+          {ticks.map((t) => <line class="grid" x1={pct(t)} x2={pct(t)} y1="0" y2={ROW} />)}
+          {row.dots.map((d) => <circle class={`mark ring ${d.cls}`} cx={d.cx} cy={d.cy} r={R} />)}
+        </g>
+        {row.dots.map((d) => <circle class="hit" cx={d.cx} cy={d.cy} r={HIT} role="img" aria-label={d.aria} data-tip={JSON.stringify(d.tip)} />)}
+      </svg>
+    </div>
+  ))}
+  <div class="dot-row" aria-hidden="true">
+    <span></span>
+    <svg width="100%" height="20">
+      {ticks.map((t, i) => <text x={pct(t)} y="14" text-anchor={anchor(i)}>{i === ticks.length - 1 ? `${t} ${unit}` : t}</text>)}
+    </svg>
+  </div>
+</div>

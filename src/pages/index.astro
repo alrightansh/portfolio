@@ -199,6 +199,11 @@ const ld = [
       color: var(--dim); pointer-events: none; }
     #lidar.on .rs-attr, #research.on .rs-attr, #energy.on .rs-attr, #himachal.on .rs-attr { pointer-events: auto; }
     .rs-attr a { color: inherit; }
+    /* to the stop's section on the research page; hidden from focus while its stop is off screen */
+    .rs-more { display: inline-block; margin-top: 22px; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;
+      color: var(--accent); border-bottom: 1px solid currentColor; visibility: hidden; transition: visibility 0s linear 0.6s; }
+    #lidar.on .rs-more, #research.on .rs-more, #energy.on .rs-more, #himachal.on .rs-more { visibility: visible; pointer-events: auto;
+      transition-delay: 0s; }
     @media (min-width: 769px) { #himachal .rs-stat { bottom: 128px; } } /* its credits wrap to three lines below about 1,100 px */
 
     /* outro */
@@ -281,6 +286,7 @@ const ld = [
       .rs-bar { margin-top: 12px; }
       .rs-bar i { width: 18px; } .rs-bar i.on { width: 28px; }
       .rs-attr { left: var(--pad); right: auto; bottom: calc(var(--bottom) + 22px); max-width: none; text-align: left; font-size: 9px; }
+      .rs-more { position: absolute; top: 0; right: 0; margin: 0; font-size: 11px; } /* on the "Research work" line */
       #himachal .rs-step { bottom: calc(var(--bottom) + 58px); } /* its credits wrap to three lines */
       .rs-place { font-size: 10px; }
       .rs-place.big { font-size: 12px; }
@@ -324,6 +330,7 @@ const ld = [
       <div class="rs-pre" data-reveal-rs="Research work"></div>
       <div class="rs-title" data-reveal-rs="Utilities in 3D"></div>
       <div class="rs-sub" data-reveal-rs="Power lines and sewers from airborne LiDAR and open data"></div>
+      <a class="rs-more" href="/work/research/#utilities-in-3d" aria-label="Read more about Utilities in 3D">Read more <span aria-hidden="true">→</span></a>
     </div>
     <div class="rs-eq" aria-hidden="true"></div>
     <div class="rs-step">
@@ -347,6 +354,7 @@ const ld = [
       <div class="rs-pre" data-reveal-rs="Research work"></div>
       <div class="rs-title" data-reveal-rs="Neugal watershed"></div>
       <div class="rs-sub" data-reveal-rs="Soil erosion risk with RUSLE, AHP and GIS"></div>
+      <a class="rs-more" href="/work/research/#neugal" aria-label="Read more about the Neugal watershed">Read more <span aria-hidden="true">→</span></a>
     </div>
     <div class="rs-eq" aria-hidden="true"><span data-term="A">A</span> = <span data-term="R">R</span> × <span data-term="K">K</span> × <span data-term="LS">LS</span> × <span data-term="C">C</span> × <span data-term="P">P</span></div>
     <div class="rs-step">
@@ -370,6 +378,7 @@ const ld = [
       <div class="rs-pre" data-reveal-rs="Research work"></div>
       <div class="rs-title" data-reveal-rs="Sun and wind"></div>
       <div class="rs-sub" data-reveal-rs="Renewable energy hotspots in North India"></div>
+      <a class="rs-more" href="/work/research/#energy" aria-label="Read more about Sun and wind">Read more <span aria-hidden="true">→</span></a>
     </div>
     <div class="rs-eq" aria-hidden="true"></div>
     <div class="rs-step">
@@ -393,6 +402,7 @@ const ld = [
       <div class="rs-pre" data-reveal-rs="Research work"></div>
       <div class="rs-title" data-reveal-rs="Himachal from orbit"></div>
       <div class="rs-sub" data-reveal-rs="Forests, snow, floods and landslides from satellite data"></div>
+      <a class="rs-more" href="/work/research/#himachal" aria-label="Read more about Himachal from orbit">Read more <span aria-hidden="true">→</span></a>
     </div>
     <div class="rs-eq" aria-hidden="true"></div>
     <div class="rs-step">

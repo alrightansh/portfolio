@@ -1,0 +1,19 @@
+---
+// A table of figures on the reading pages: an optional caption, column heads, and each row's first cell as its
+// header. Columns listed in `num` (0-based) align right. Each cell carries its column head, which phones show in
+// front of it when the rows stack (the .compare rules in page.css).
+interface Props { caption?: string; head: string[]; rows: (string | number)[][]; num?: number[] }
+const { caption, head, rows, num = [] } = Astro.props;
+const cls = (i: number) => (num.includes(i) ? "num" : undefined);
+---
+<div class="table-scroll">
+  <table class="compare data">
+    {caption && <caption class="caps-dim">{caption}</caption>}
+    <thead><tr>{head.map((h, i) => <th scope="col" class={cls(i)}>{h}</th>)}</tr></thead>
+    <tbody>
+      {rows.map((row) => (
+        <tr>{row.map((c, i) => (i === 0 ? <th scope="row">{c}</th> : <td class={cls(i)} data-k={head[i]}>{c}</td>))}</tr>
+      ))}
+    </tbody>
+  </table>
+</div>

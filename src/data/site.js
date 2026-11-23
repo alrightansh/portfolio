@@ -29,7 +29,7 @@ export const NAV = [
   { href: "/work/", label: "Work", note: "Overview, experience and skills" },
   { href: "/work/utility-network/", label: "Utility networks", note: "Enterprise GIS case study" },
   { href: "/work/ai/", label: "AI meets GIS", note: "MCP for ArcGIS" },
-  { href: "/work/earth-observation/", label: "Earth observation", note: "Research and remote sensing" },
+  { href: "/work/research/", label: "Research", note: "Utilities, soil, energy and hazards" },
 ];
 
 // Status vocabulary for work that is not finished. Order = maturity.

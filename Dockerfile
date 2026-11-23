@@ -8,8 +8,8 @@ COPY astro.config.mjs tsconfig.json ./
 COPY tools/check-csp.mjs tools/check-csp.mjs
 COPY src src
 COPY public public
-# dist/_headers is for Cloudflare; nginx sends the same headers from security-headers.conf.
-RUN npm run build && rm dist/_headers
+# dist/_headers and dist/_redirects are for Cloudflare; nginx has the same rules (security-headers.conf, nginx.conf).
+RUN npm run build && rm dist/_headers dist/_redirects
 
 FROM nginxinc/nginx-unprivileged:1.29-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf

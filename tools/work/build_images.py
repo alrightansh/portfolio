@@ -5,6 +5,9 @@ and the north-india-renewables map sheets. Needs Pillow with WebP support.
 
 neugal-risk-*.webp is a still of the Neugal stop in the flight; capture a 1600 x 1000 PNG of the soil-loss stage
 and pass it with --neugal path/to/still.png to rebuild it.
+
+li-*-v1-*.webp are stills of the Utilities in 3D stop: pass --lidar with a folder holding 1600 x 1000 PNGs named
+c-s1-classes, c-s2-wires, c-s3-trees and c-s4-sewers (the classes, 380 kV span, trees and sewers stages).
 """
 import argparse
 from pathlib import Path
@@ -40,6 +43,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("renewables", nargs="?", default=str(ROOT.parent / "north-india-renewables"))
     ap.add_argument("--neugal", help="PNG still of the Neugal soil-loss stage from the flight")
+    ap.add_argument("--lidar", help="folder of PNG stills of the Utilities in 3D stop from the flight")
     a = ap.parse_args()
 
     sheet = Path(a.renewables) / "outputs" / "maps" / "00_hero_3d.png"
@@ -57,6 +61,11 @@ def main():
 
     if a.neugal:
         save(crop_ratio(Image.open(a.neugal).convert("RGB"), 16 / 10), "neugal-risk-v1", [800, 1600])
+
+    if a.lidar:
+        for still, name in (("s1-classes", "classes"), ("s2-wires", "wires"), ("s3-trees", "trees"), ("s4-sewers", "sewers")):
+            img = Image.open(Path(a.lidar) / f"c-{still}.png").convert("RGB")
+            save(crop_ratio(img, 16 / 10), f"li-{name}-v1", [800, 1600])
 
 
 if __name__ == "__main__":
