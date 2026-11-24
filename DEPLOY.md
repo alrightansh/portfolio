@@ -31,8 +31,15 @@ about a minute, whether or not the PC is on. The Docker stack further down is fo
    for `alrightansh.com` and `www` that point to `...cfargotunnel.com`), then add the domains again.
 5. On the PC, whenever convenient: `docker compose --profile tunnel down` (the tunnel no longer serves the site).
 
-Optional: the map data (`*.bin`) is served uncompressed by default. Rules > Compression Rules > Create rule,
-"URI Path ends with .bin", enable compression: about 15 to 60% smaller per file, as nginx's gzip did.
+Keep exactly one Worker, named `portfolio`, with both the custom domains and the Git connection (Settings > Build).
+A second Worker connected to the repo takes the builds, and the domain then stays on an old version: if the
+Deployments tab shows no deploy after a push, check that connection first.
+
+Optional:
+- The map data (`*.bin`) is served uncompressed by default. Rules > Compression Rules > Create rule, "URI Path ends
+  with .bin", enable compression: about 15 to 60% smaller per file, as nginx's gzip did.
+- Cloudflare injects two scripts into every page, Web Analytics' beacon and Bot Fight Mode's JavaScript detections.
+  The CSP blocks both (a console warning, nothing else), so switch them off unless the CSP is widened for them.
 
 ## Day to day
 
