@@ -8,15 +8,6 @@
   // wrangler deploy, versions upload and dev build the site first, so a deploy never depends on the dashboard's
   // build command (left empty, dist/ would be missing and the deploy would fail).
   "build": { "command": "npm run build" },
-  // The Worker is the origin for both hostnames. Deployed from Workers Builds (no terminal), wrangler replaces any DNS
-  // record already on them, such as the old tunnel's CNAMEs, so every path is served from here.
-  "routes": [
-    { "pattern": "alrightansh.com", "custom_domain": true },
-    { "pattern": "www.alrightansh.com", "custom_domain": true }
-  ],
-  // Routes would otherwise switch these off: keep the workers.dev address and the preview URLs of other branches.
-  "workers_dev": true,
-  "preview_urls": true,
   "assets": {
     "directory": "./dist",
     // Astro builds with trailingSlash "always": /work/ai redirects to /work/ai/, which serves work/ai/index.html.
