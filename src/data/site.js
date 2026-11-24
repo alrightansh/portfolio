@@ -28,6 +28,7 @@ export const NAV = [
   { href: "/", label: "The flight", note: "A 3D flight through the work" },
   { href: "/work/", label: "Work", note: "Overview, experience and skills" },
   { href: "/work/utility-network/", label: "Utility networks", note: "Enterprise GIS case study" },
+  { href: "/work/utilities-in-3d/", label: "Utilities in 3D", note: "Power lines and sewers from LiDAR" },
   { href: "/work/ai/", label: "AI meets GIS", note: "MCP for ArcGIS" },
   { href: "/work/research/", label: "Research", note: "Utilities, soil, energy and hazards" },
 ];

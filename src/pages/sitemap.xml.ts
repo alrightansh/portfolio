@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 
 // Every public page. Add new routes here.
-const ROUTES = ["/", "/work/", "/work/utility-network/", "/work/ai/", "/work/research/"];
+const ROUTES = ["/", "/work/", "/work/utility-network/", "/work/utilities-in-3d/", "/work/ai/", "/work/research/"];
 
 export const GET: APIRoute = async ({ site }) => {
   const base = site ?? new URL("https://alrightansh.com");

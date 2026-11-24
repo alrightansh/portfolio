@@ -15,8 +15,9 @@ Working notes for anyone (human or agent) changing this site. Read this first.
 | `/` | The flight (unchanged experience; links into the work pages) |
 | `/work/` | Overview: positioning, focus areas, experience, skills matrix, contact |
 | `/work/utility-network/` | Case study: Smallworld to Esri, ArcGIS Utility Network, network data, PostGIS, FME, Python, Power BI |
+| `/work/utilities-in-3d/` | Case study: AHN6 LiDAR over a block of Wierden, wires fitted as parabolas, tree clearance, sewers and where the water goes; charts from `src/data/lidar-figures.js` |
 | `/work/ai/` | AI meets GIS: MCP server architecture with status labels |
-| `/work/research/` | The four research projects in flight order, each linked to its stop in the flight; Utilities in 3D carries its full analysis (charts from `src/data/lidar-stats.json`). The old `/work/earth-observation/` redirects here (301 in `public/_redirects` and `nginx.conf`) |
+| `/work/research/` | The four research projects in flight order, each linked to its stop in the flight; Utilities in 3D links on to its case study. The old `/work/earth-observation/` redirects here (301 in `public/_redirects` and `nginx.conf`) |
 
 Deep links into the flight: `/#utility-networks`, `/#utilities-in-3d`, `/#toolkit`, `/#remote-sensing`, `/#neugal`, `/#sun-and-wind`,
 `/#himachal`, `/#himachal-from-orbit`, `/#gispost`, `/#paper-peaks`, `/#makemedizzy` (ids live in `src/scripts/content.js`).
@@ -51,11 +52,12 @@ src/pages/index.astro            flight page (HUD markup + styles)
 src/pages/work/*.astro           reading pages
 src/layouts/Page.astro           shared head (meta, OG, JSON-LD), chrome, menu, contact outro, ticks
 src/components/*.astro           Hero, Contours, Chapter, Flow, NetworkDiagram, Equation, CodeTabs, CodeBlock,
-                                 Compare, SkillsMatrix, Status, Figure, ProjectCase, Cta, LidarAnalysis
+                                 Compare, SkillsMatrix, Status, Figure, ProjectCase, Cta
 src/components/charts/*.astro    build-time SVG charts (Columns, BarList, DotRows) in a ChartFrame with a DataTable view
 src/data/site.js                 person, links, nav, status vocabulary
 src/data/{flows,skills,ai,projects,code}.js   structured copy for the reading pages
-src/data/lidar-stats.json        Utilities in 3D figures (tools/lidar/analyse_lidar.py); LidarAnalysis.astro reads them
+src/data/lidar-stats.json        Utilities in 3D figures (tools/lidar/analyse_lidar.py)
+src/data/lidar-figures.js        chart rows, copy and flows for /work/utilities-in-3d/, all read from lidar-stats.json
 src/styles/base.css              tokens, @font-face, reveal primitives, ticks, page-change bar (both page types)
 src/styles/page.css              reading-page styles
 src/scripts/main.js              flight orchestration (boot, virtual scroll, stops, deep links)

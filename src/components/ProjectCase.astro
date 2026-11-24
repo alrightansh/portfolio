@@ -1,7 +1,7 @@
 ---
 // One research project in the case-study template: heading, real image, key figures, and the facts
-// (problem, scope, data, method, results, limits, use, tools). Links to its stop in the 3D flight. A longer
-// analysis passed in as children follows the facts.
+// (problem, scope, data, method, results, limits, use, tools). Links to its stop in the 3D flight, and to its own case
+// study when it has one (`more`). Anything passed in as children follows the facts.
 import Figure from "./Figure.astro";
 import Status from "./Status.astro";
 const { p, n, of } = Astro.props;
@@ -30,6 +30,7 @@ const pad = (v: number) => String(v).padStart(2, "0");
           {p.facts.map(([k, v]) => <div><dt>{k}</dt><dd>{v}</dd></div>)}
         </dl>
         <div class="case-links" data-block>
+          {p.more && <a class="link" href={p.more.href}>{p.more.text} <span class="arr" aria-hidden="true">→</span></a>}
           <a class="link" href={p.fly}>Fly to it in 3D <span class="arr" aria-hidden="true">→</span></a>
         </div>
       </div>

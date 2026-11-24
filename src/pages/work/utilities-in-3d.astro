@@ -1,0 +1,206 @@
+---
+import Page from "../../layouts/Page.astro";
+import Hero from "../../components/Hero.astro";
+import Chapter from "../../components/Chapter.astro";
+import Flow from "../../components/Flow.astro";
+import Equation from "../../components/Equation.astro";
+import Figure from "../../components/Figure.astro";
+import ChartFrame from "../../components/charts/ChartFrame.astro";
+import BarList from "../../components/charts/BarList.astro";
+import DotRows from "../../components/charts/DotRows.astro";
+import Columns from "../../components/charts/Columns.astro";
+import DataTable from "../../components/charts/DataTable.astro";
+import { PERSON } from "../../data/site.js";
+import * as F from "../../data/lidar-figures.js";
+
+const { survey, power, sewers, clr, depth, pump, weirs, n, m, pc, word, between } = F;
+const N = 6;
+const sizes = "(max-width: 768px) 100vw, 45vw";
+const title = "Utilities in 3D: power lines, trees and sewers from LiDAR · Anshuman Choudhary";
+const description = "Case study: a block of Wierden from the AHN6 airborne LiDAR survey. 42 power line wires fitted as parabolas, tree clearance under the lines, and the sewer network beneath the street, from open data.";
+const jsonLd = {
+  "@context": "https://schema.org", "@type": "Article",
+  headline: "Utilities in 3D: power lines, trees and sewers from airborne LiDAR",
+  description, author: { "@type": "Person", name: PERSON.name, url: "https://alrightansh.com/" },
+  about: ["Airborne LiDAR", "AHN6", "Power line clearance", "Vegetation management", "Sewer networks", "GWSW", "three.js"],
+};
+---
+<Page title={title} description={description} path="/work/utilities-in-3d/" crumb={{ href: "/work/", label: "Work" }} jsonLd={jsonLd}>
+  <Hero a="Utilities" b="in 3D" seed={31} pre="Case study · Airborne LiDAR"
+    lead="Power lines, the trees beneath them and the sewers under the street, measured from one airborne laser survey of a Dutch town." />
+
+  <section class="section" aria-label="Project overview">
+    <div class="wrap">
+      <dl class="overview" data-items="fade">
+        <div><dt>Category</dt><dd>Independent project, built on open data</dd></div>
+        <div><dt>Area</dt><dd>A 1,000 × 750 m block of Wierden, Overijssel, the Netherlands</dd></div>
+        <div><dt>Data</dt><dd>AHN6 airborne LiDAR, GWSW sewers via PDOK, OpenStreetMap power lines</dd></div>
+        <div><dt>Stack</dt><dd>Python (laspy, numpy, scipy, pyproj), three.js</dd></div>
+      </dl>
+      <div class="stats" data-items="fade">
+        <div><div class="stat-num">{n(survey.points / 1e6, 1)}</div><div class="stat-unit">million laser returns over {n(survey.areaKm2, 2)} km²</div></div>
+        <div><div class="stat-num">{n(clr.tree, 1)}</div><div class="stat-unit">m from a 110 kV wire to the trees beneath it</div></div>
+        <div><div class="stat-num">{F.sewerKm}</div><div class="stat-unit">km of sewer mapped beneath the block</div></div>
+      </div>
+      <div class="case-links" data-block>
+        <a class="link" href="/#utilities-in-3d">Fly to it in 3D <span class="arr" aria-hidden="true">→</span></a>
+        <a class="link" href="/work/research/">All research <span class="arr" aria-hidden="true">→</span></a>
+      </div>
+    </div>
+  </section>
+
+  <Chapter id="survey" n={1} of={N} title="One flight, 22 million returns" sub="AHN6 over a block of Wierden" label="Survey">
+    <div class="split2 an-head">
+      <div>
+        <p class="lead" data-block>AHN6 flew over the block {F.passes} on {F.flown}: {F.seconds} seconds of scanning that left
+          {n(survey.density, 1)} returns on every square metre.</p>
+        <p class="body" data-block>AHN classes each return as ground, building, water, wire or civil structure. Here, unclassified returns
+          2.5 m or more above the terrain count as trees. Nearly half the cloud is ground ({pc(F.share(survey.classes.ground))}) and a third
+          is trees ({pc(F.share(survey.classes.tree))}). Half the tree returns stand higher than {m(survey.treeHeight.p50)}, a tenth higher
+          than {m(survey.treeHeight.p90)}.</p>
+        <p class="body" data-block>The power lines are thin: wires and pylons together come to {n(F.lineReturns)} returns,
+          {pc(F.share(F.lineReturns))} of the cloud. That is enough to rebuild every wire.</p>
+      </div>
+      <Figure src="/work/li-classes-v1" w={1600} h={1000} sizes={sizes}
+        alt="The block of Wierden in its laser classes: trees in green, buildings in tan, open ground in grey, a pond, and both power lines in yellow with their white pylons."
+        caption="Every return in its class: a still from the stop in the flight." credit={F.CREDIT} />
+    </div>
+    <div class="split2 an-row">
+      <ChartFrame title="Returns by class" note={F.classNote} head={["Class", "Returns", "Share"]} rows={F.classRows} num={[1, 2]}>
+        <BarList label="Returns by class" cls="s-blue" rows={F.classBars} />
+      </ChartFrame>
+      <dl class="facts" data-items="fade">
+        <div><dt>Flown</dt><dd>{F.flown}, {F.passNoun}, {F.seconds} seconds of scanning</dd></div>
+        <div><dt>Area</dt><dd>1,000 × 750 m, {n(survey.areaKm2, 2)} km²</dd></div>
+        <div><dt>Returns</dt><dd>{n(survey.points)}, {n(survey.density, 1)} a square metre</dd></div>
+        <div><dt>Trees</dt><dd>Half taller than {m(survey.treeHeight.p50)}, a tenth taller than {m(survey.treeHeight.p90)}</dd></div>
+      </dl>
+    </div>
+  </Chapter>
+
+  <Chapter id="wires" n={2} of={N} title={`${power.wires} wires, each a parabola`} sub="Fitting the power lines span by span" label="Power lines">
+    <div class="split2 an-head">
+      <Figure src="/work/li-wires-v1" w={1600} h={1000} sizes={sizes}
+        alt="The 380 kV line over the block in 3D: its fitted wires hang between pylons 47 m and 43 m tall above the grey point cloud of houses and trees, the deepest sagging 11.5 m."
+        caption="The 380 kV line's 414 m span, its wires fitted through their laser returns: a still from the stop in the flight." credit={F.CREDIT} />
+      <div>
+        <p class="lead" data-block>Each wire is one hanging parabola fitted through its own returns, span by span between the pylons that
+          OpenStreetMap maps.</p>
+        <p class="body" data-block>Of the {n(power.fit.returns)} wire returns away from the pylons, {pc(power.fit.within25cm)} lie within
+          25 cm of their fitted wire and {pc(power.fit.within50cm)} within 50 cm. The 380 kV pylons stand {between(F.pylons(380))} tall,
+          the 110 kV pylons {between(F.pylons(110))}.</p>
+      </div>
+    </div>
+    <div class="an-row">
+      <p class="body" data-block>Sag says how tight a wire is strung. A parabola ties the two together: the span squared over eight times the
+        sag is the wire's horizontal tension over its weight a metre.</p>
+      <Equation out="H ÷ w" terms={F.SAG_TERMS} />
+    </div>
+    <div class="split2 an-row">
+      <ChartFrame title="Sag of every wire, span by span" note="One dot a wire. A span only partly in the block is fitted on the part inside it."
+        keys={F.sagKeys} head={F.wireHead} rows={F.wireRows} num={[2, 3, 4, 5]}>
+        <DotRows label="Sag of every wire, span by span" rows={F.sagRows} x0={5} x1={13} ticks={[5, 7, 9, 11, 13]} unit="m" />
+      </ChartFrame>
+      <div>
+        <p class="body" data-block>{F.spanSags}. The tension over weight comes to {F.tension(380)} on the whole 380 kV spans against
+          {F.tension(110)} on the whole 110 kV span: the bigger line is strung tighter for its weight.</p>
+        <p class="body" data-block>The lowest 110 kV wire passes {m(F.lowest(110))} above the ground, the lowest 380 kV wire
+          {m(F.lowest(380))}.</p>
+      </div>
+    </div>
+    <div class="an-table" data-block>
+      <DataTable caption={F.spanCaption} head={F.spanHead} rows={F.spanRows} num={[3, 4, 5, 6]} />
+    </div>
+  </Chapter>
+
+  <Chapter id="clearance" n={3} of={N} title="Trees under the line" sub="Every return measured to its nearest wire" label="Clearance">
+    <div class="split2 an-head">
+      <div>
+        <p class="lead" data-block>Nothing grows within {m(F.clearFrom, 0)} of a wire. {n(clr.within5)} tree returns come within 5 m, all
+          but {n(clr.within5ByKv["380"])} under the 110 kV line, and {n(F.inPatches)} of them sit in {word(power.patches.length)}
+          patches.</p>
+        <p class="body" data-block>Distances leave out 25 m round each pylon. The flight gives {m(clr.tree)}, setting aside the nearest
+          {clr.strays} returns as strays: insulators, spacers and birds look like twigs to a laser. The very nearest is {m(clr.closest)}.
+          Roofs stay at least {m(clr.building)} clear.</p>
+        <p class="body" data-block>The scan is from February, with the leaves down, so the summer canopy comes closer.</p>
+      </div>
+      <Figure src="/work/li-trees-v1" w={1600} h={1000} sizes={sizes} alt={F.treesAlt}
+        caption="Trees under the 110 kV line: a still from the stop in the flight." credit={F.CREDIT} />
+    </div>
+    <div class="split2 an-row">
+      <ChartFrame title="Tree returns near a wire" note={F.nearNote} head={F.nearHead} rows={F.nearRows} num={[1, 2, 3]}>
+        <Columns label="Tree returns by distance to the nearest wire" cats={F.nearCats} series={F.nearSeries} max={2500}
+          yTicks={[500, 1000, 1500, 2000, 2500]} fmt={F.count} xTicks={F.nearTicks} fill={0.4} />
+      </ChartFrame>
+      <div data-block>
+        <DataTable caption={F.patchCaption} head={F.patchHead} rows={F.patchRows} num={[1, 2, 3]} />
+      </div>
+    </div>
+  </Chapter>
+
+  <Chapter id="sewers" n={4} of={N} title="Under the street" sub="The municipality's open sewer data" label="Sewers">
+    <div class="split2 an-head">
+      <Figure src="/work/li-sewers-v1" w={1600} h={1000} sizes={sizes} alt={F.sewersAlt}
+        caption="The sewers below the street: a still from the stop in the flight." credit={F.SEWER_CREDIT} />
+      <div>
+        <p class="lead" data-block>A separated system: {F.kmText(sewers.km.foul)} of foul sewer and {F.kmText(sewers.km.storm)} of storm
+          drain run side by side, with {F.kmText(sewers.km.combined)} of combined sewer left from {F.combinedSince}.</p>
+        <p class="body" data-block>Most of it was laid in {F.busiestYears}, more in {F.nextYears}; the median year is
+          {sewers.years.median}. Concrete makes up {F.concrete}% of the length, PE and PVC the rest, and {F.egg}% is egg-shaped, narrow at
+          the bottom so low flows stay fast. Most foul sewers are {F.mainSize("foul")} mm, most storm drains {F.mainSize("storm")} mm.</p>
+        <p class="body" data-block>The land is flat, so the pipes barely fall: half the gravity length drops less than
+          {m(sewers.gradient.median, 2)} a kilometre, {n(sewers.gradient.under1)}% less than 1 m. {n(depth.manholes)} manholes reach the
+          lowest pipe {m(depth.median, 2)} down at the median and {m(depth.max)} at the deepest.</p>
+      </div>
+    </div>
+    <div class="split2 an-row">
+      <ChartFrame title={F.yearTitle} note="Kilometres of pipe by the year it was laid." keys={F.yearKeys} head={F.yearHead}
+        rows={F.yearRows} num={[1, 2, 3, 4, 5]}>
+        <Columns label="Sewer laid each year by kind" cats={F.yearCats} series={F.yearSeries} max={6} yTicks={[2, 4, 6]}
+          yFmt={F.kmTick} fmt={F.kmOrDash} xTicks={F.yearTicks} fill={0.7} />
+      </ChartFrame>
+      <ChartFrame title="Manholes by depth" note={F.depthNote} head={["Depth", "Manholes"]} rows={F.depthRows} num={[1]}>
+        <Columns label="Manholes by depth" cats={F.depthCats} series={F.depthSeries} max={80} yTicks={[20, 40, 60, 80]}
+          fmt={F.count} xTicks={F.depthTicks} marker={F.depthMarker} fill={0.5} />
+      </ChartFrame>
+    </div>
+    <div class="an-table" data-block>
+      <DataTable caption="The network" head={F.netHead} rows={F.netRows} num={[1, 2]} />
+    </div>
+  </Chapter>
+
+  <Chapter id="water" n={5} of={N} title="Where the water goes" sub="Pumps, mains and overflows" label="Water">
+    <p class="lead" data-block>Pumps do the lifting. All the foul water reaches {pump.name}, which pumps it out of the block toward the
+      treatment plant.</p>
+    <Flow id="water-flow" steps={F.WATER} label="The foul water's path from the block's sewers to the treatment plant"
+      kicker={`Foul water · ${F.WATER.length} steps`} caption="From the municipality's GWSW sewer data via PDOK, and the water boards' data." />
+    <p class="body" data-block>Rain is kept apart: {F.kmText(sewers.km.storm)} of storm drains carry it to outlets of their own. In heavy
+      rain, {word(weirs.length)} overflow chambers can spill to surface water over weirs {between(weirs, 2)} above NAP.</p>
+  </Chapter>
+
+  <Chapter id="method" n={6} of={N} title="From laser to browser" sub="The pipeline behind the stop" label="Method">
+    <p class="lead" data-block>One Python script turns the open data into the stop in the flight, and a second works the figures on this page
+      out of the same cache, so the two always agree.</p>
+    <Flow id="lidar-flow" steps={F.PIPELINE} mode="scroll" label="From the AHN6 tiles to the 3D stop in the flight"
+      kicker={`LiDAR pipeline · ${F.PIPELINE.length} stages`} caption="Python with laspy, numpy, scipy and pyproj; three.js in the browser." />
+    <div class="split2 block">
+      <dl class="facts" data-items="fade">
+        <div><dt>Limits</dt><dd>A February scan, with the leaves down, so the summer canopy comes closer. Sag changes with temperature and
+          load, so the fit holds for the day of the scan. Pressure mains carry no levels, so they are placed at a nominal depth.</dd></div>
+        <div><dt>Use</dt><dd>Vegetation management along the lines, clearance checks, and planning digs around buried pipes.</dd></div>
+      </dl>
+      <div>
+        <div class="case-links" data-block>
+          <a class="link" href="/#utilities-in-3d">Fly to it in 3D <span class="arr" aria-hidden="true">→</span></a>
+        </div>
+      </div>
+    </div>
+  </Chapter>
+
+  <nav class="next wrap" aria-label="Next case study">
+    <a href="/work/ai/">
+      <span class="idx" data-split data-stagger="14">Next</span>
+      <span class="next-title" data-split>AI meets GIS <span class="arr">→</span></span>
+    </a>
+  </nav>
+</Page>

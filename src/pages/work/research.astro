@@ -2,7 +2,6 @@
 import Page from "../../layouts/Page.astro";
 import Hero from "../../components/Hero.astro";
 import ProjectCase from "../../components/ProjectCase.astro";
-import LidarAnalysis from "../../components/LidarAnalysis.astro";
 import Figure from "../../components/Figure.astro";
 import { PROJECTS, ALSO, DATASETS } from "../../data/projects.js";
 import { PERSON } from "../../data/site.js";
@@ -48,11 +47,7 @@ const pad = (v: number) => String(v).padStart(2, "0");
     </div>
   </section>
 
-  {PROJECTS.map((p, i) => (
-    <ProjectCase p={p} n={i + 1} of={PROJECTS.length}>
-      {p.id === "utilities-in-3d" && <LidarAnalysis />}
-    </ProjectCase>
-  ))}
+  {PROJECTS.map((p, i) => <ProjectCase p={p} n={i + 1} of={PROJECTS.length} />)}
 
   <section class="section" aria-labelledby="also-title">
     <div class="wrap">

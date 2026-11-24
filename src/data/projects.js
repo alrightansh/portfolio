@@ -5,7 +5,7 @@ export const PROJECTS = [
   {
     id: "utilities-in-3d", kind: "Independent project",
     title: "Utilities in 3D", sub: "Power lines, trees and sewers from airborne LiDAR", place: "Wierden, the Netherlands",
-    fly: "/#utilities-in-3d",
+    fly: "/#utilities-in-3d", more: { href: "/work/utilities-in-3d/", text: "Read the case study" },
     img: { src: "/work/li-wires-v1", w: 1600, h: 1000, alt: "The 380 kV line over a block of Wierden in 3D: its fitted wires hang between pylons 47 m and 43 m tall above the grey point cloud of houses and trees, the deepest sagging 11.5 m.",
       caption: "The 380 kV line's 414 m span, its wires fitted through their laser returns: a still from the stop in the flight.",
       credit: "Point cloud: AHN6, Het Waterschapshuis. Power lines © OpenStreetMap contributors." },
