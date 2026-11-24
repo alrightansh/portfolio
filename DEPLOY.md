@@ -26,10 +26,9 @@ about a minute, whether or not the PC is on. The Docker stack further down is fo
    - Deploy command: `npx wrangler deploy`
    - Builds for non-production branches: on, with `npx wrangler versions upload`
 3. Create and deploy. When the build finishes, open the `*.workers.dev` link it shows and check the site.
-4. Nothing to do for the domains: `wrangler.jsonc` declares `alrightansh.com` and `www.alrightansh.com` as custom
-   domains, and each deploy attaches them, replacing the old tunnel CNAMEs. If a build log says it could not, add
-   them by hand: Settings > Domains & Routes > Add > Custom domain (delete the tunnel CNAMEs under DNS > Records
-   first), and remove any plain route such as `alrightansh.com/`, which serves the home page alone.
+4. Settings > Domains & Routes > Add > Custom domain: `alrightansh.com`, then again for `www.alrightansh.com`.
+   If Cloudflare says a DNS record already exists, delete the two old tunnel records first (DNS > Records: the CNAMEs
+   for `alrightansh.com` and `www` that point to `...cfargotunnel.com`), then add the domains again.
 5. On the PC, whenever convenient: `docker compose --profile tunnel down` (the tunnel no longer serves the site).
 
 Optional: the map data (`*.bin`) is served uncompressed by default. Rules > Compression Rules > Create rule,
@@ -57,9 +56,8 @@ docker compose -f compose.yaml -f compose.debug.yaml up -d --build web   # http:
 docker compose down
 ```
 
-To serve the site from the PC again instead of Cloudflare: take `routes` out of `wrangler.jsonc`, remove the Worker's
-custom domains, then `docker compose --profile tunnel up -d --build` and
-`cloudflared tunnel route dns <name> alrightansh.com`.
+To serve the site from the PC again instead of Cloudflare: remove the Worker's custom domains, then
+`docker compose --profile tunnel up -d --build` and `cloudflared tunnel route dns <name> alrightansh.com`.
 
 Secrets live in `secrets/`, which is gitignored. Never commit them.
 
